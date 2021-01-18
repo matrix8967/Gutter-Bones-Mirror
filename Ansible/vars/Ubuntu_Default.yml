@@ -1,0 +1,5 @@
+---
+user_name: whiterose
+hostname: cs32
+copy_local_key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+sys_packages: ['git', 'iftop', 'nmap', 'curl', 'ipcalc', 'ncdu', 'pwgen', 'htop', 'wavemon', 'vim', 'tmux', 'fail2ban', 'tldr', 'neofetch', 'zsh', 'fonts-powerline', 'flatpak', 'ruby-full', 'build-essential', 'zlib1g-dev', 'tmux-plugin-manager', 'exfat-fuse', 'exfat-utils', 'taskwarrior', 'openvpn', 'dialog', 'python3-pip', 'python3-setuptools', 'libclang-dev', 'cifs-utils', 'neovim', 'nfs-common', 'speedtest-cli', 'tree', 'vis', 'ncmpcpp', 'mpc', 'figlet', 'asciinema', 'net-tools', 'powertop', 'lolcat', 'youtube-dl', 'neovim', 'ncdu', 'tcpdump', 'mc', 'wireshark', 'mplayer', 'most', 'imagemagick', 'ufw']

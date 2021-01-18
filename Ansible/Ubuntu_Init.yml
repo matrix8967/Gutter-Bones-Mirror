@@ -1,0 +1,98 @@
+- hosts: all
+  become: true
+  vars_files:
+    - vars/Ubuntu_Default.yml
+
+  tasks:
+    - name: Update Apt, Install Packages, Force use of apt-get because apt sucks.
+      apt: name=aptitude update_cache=yes state=latest force_apt_get=yes
+
+# User + Group Setup
+    - name: Create User with Wheel Group Access.
+      user:
+        name: "{{ user_name }}"
+        state: present
+        groups: sudo
+        append: true
+        create_home: true
+        shell: /bin/bash
+        password: '*'
+
+    - name: Set a hostname
+      hostname:
+        name: "{{ hostname }}"
+
+# Package Install
+    - name: Apt Update.
+      apt: update_cache=yes
+
+    - name: Apt Upgrade.
+      apt:
+        upgrade: 'yes'
+
+    - name: Install Default Packages.
+      apt: name={{ sys_packages }} state=latest
+
+    - name: Remove ubuntu spyware
+      apt:
+        name: popularity-contest
+        state: absent
+
+    - name: Copy Dotfiles
+      copy:
+        dest: /home/{{ user_name }}/
+        src: home/
+        owner: "{{ user_name }}"
+        group: "{{ user_name }}"
+
+    - name: Delete MOTD
+      file:
+        path: /etc/update-motd.d/
+        state: absent
+
+    - name: Create MOTD
+      file:
+        path: /etc/update-motd.d/
+        state: directory
+
+    - name: Setup new motd
+      copy:
+        dest: /etc/update-motd.d/10-motd
+        src: etc/update-motd.d/10-motd
+        owner: root
+        group: root
+        mode: a+x
+
+# SSH Key Exchange & Service Reload
+    - name: SSH Key Exchange.
+      authorized_key:
+        user: "{{ user_name }}"
+        state: present
+        key: "{{ copy_local_key }}"
+
+    - name: Add hardened SSH config
+      copy:
+        dest: /etc/ssh/sshd_config
+        src: etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: 0600
+      notify: Reload SSH
+
+  handlers:
+    - name: Reload SSH
+      service:
+        name: sshd
+        state: reloaded
+
+# UFW Setup
+    # - name: UFW Allow SSH.
+    #   ufw:
+    #     rule: allow
+    #     name: OpenSSH
+    #
+    # - name: UFW - Deny all except SSH.
+    #   ufw:
+    #     state: enabled
+    #     policy: deny
+    #     direction: incoming
