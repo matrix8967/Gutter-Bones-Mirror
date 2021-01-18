@@ -8,7 +8,20 @@
       apt: name=aptitude update_cache=yes state=latest force_apt_get=yes
 
 # User + Group Setup
-    - name: Create User with Wheel Group Access.
+    - name: Make sure we have a 'sudo' group
+      group:
+        name: sudo
+        state: present
+
+    - name: Allow 'sudo' group to have passwordless sudo
+      lineinfile:
+        path: /etc/sudoers
+        state: present
+        regexp: '^%sudo'
+        line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+        validate: '/usr/sbin/visudo -cf %s'
+
+    - name: Create User.
       user:
         name: "{{ user_name }}"
         state: present
@@ -16,7 +29,7 @@
         append: true
         create_home: true
         shell: /bin/bash
-        password: '*'
+#        password: '*'
 
     - name: Set a hostname
       hostname:

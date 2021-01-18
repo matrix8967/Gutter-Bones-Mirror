@@ -1,1 +1,2 @@
-Ansible/Inventory/
+/Ansible/Inventory/*
+/Ansible/Inventory

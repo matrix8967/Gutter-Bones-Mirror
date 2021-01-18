@@ -20,7 +20,7 @@ ZSH_THEME=powerlevel10k/powerlevel10k
 
 #plugins=(git zsh-syntax-highlighting tmux taskwarrior systemd ssh-agent rsync python pylint pyenv pip oc nmap minikube microk8s git-extras docker cp cargo ansible adb)
 
-plugins=(adb ansible cargo colored-man-pages colorize cp docker docker-compose git git-extras httpie microk8s minikube nmap oc pip pyenv pylint python rsync ssh-agent systemadmin systemd taskwarrior tmux tmux-cssh zsh-autosuggestions zsh-syntax-highlighting)
+plugins=(adb ansible cargo colored-man-pages colorize cp docker docker-compose git git-extras httpie microk8s minikube nmap oc pip pyenv pylint python rsync ssh-agent systemadmin systemd taskwarrior tmux tmux-cssh zsh-syntax-highlighting)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -46,15 +46,23 @@ export PATH=$HOME/.gems/bin:$PATH
 
 export PATH=$PATH:~/.cargo/bin/
 
+# =====Kitty Config===== #
+
+# autoload -Uz compinit
+# compinit
+# Completion for kitty
+# kitty + complete setup zsh | source /dev/stdin
+
 # =====Aliases===== #
 
-alias ls='lsd'
 alias nano='vim'
 alias pls='sudo'
+alias ls='lsd'
 alias l='ls -l'
 alias la='ls -a'
 alias lla='ls -la'
 alias lt='ls --tree'
+# alias icat='kitty +kitten icat'
 alias dm='dmesg -HTL'
 
 # =====Zsh Opts===== #
@@ -65,7 +73,6 @@ compinit -d ~/.cache/zcompdump
 zstyle ':completion:*:*:*:*:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' # case insensitive tab completion
 
-# history File Fixes
 setopt appendhistory
 setopt histignorealldups
 setopt HIST_SAVE_NO_DUPS
@@ -76,12 +83,12 @@ setopt HIST_IGNORE_DUPS
 
 # =====Functions===== #
 
-function amimullvad {
-	curl https://am.i.mullvad.net/connected
-}
-
 function pvpn {
 	sudo protonvpn c -f
+}
+
+function amimullvad {
+	curl https://am.i.mullvad.net/connected
 }
 
 function dig_outside {
@@ -100,14 +107,8 @@ function ElecomEX-GPro {
 	~/Scripts/./ElecomEX-GPro.sh
 }
 
-# =====Kitty Config===== #
+# =====Blur for Kitty Term===== #
 
-# autoload -Uz compinit
-# compinit
-# Completion for kitty
-# kitty + complete setup zsh | source /dev/stdin
-# alias icat='kitty +kitten icat'
-#
 # if [[ $(ps --no-header -p $PPID -o comm) =~ '^yakuake|kitty$' ]]; then
 #         for wid in $(xdotool search --pid $PPID); do
 #             xprop -f _KDE_NET_WM_BLUR_BEHIND_REGION 32c -set _KDE_NET_WM_BLUR_BEHIND_REGION 0 -id $wid; done
