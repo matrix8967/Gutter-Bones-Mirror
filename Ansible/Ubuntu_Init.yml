@@ -3,17 +3,30 @@
   vars_files:
     - vars/Ubuntu_Default.yml
 
+  vars_prompt:
+    - name: "user_name"
+      prompt: Desired username?
+      private: no
+
+    - name: "hostname"
+      prompt: Desired hostname?
+      private: no
+
+    - name: "ssh_port"
+      prompt: Desired SSH Port?
+      private: no
+
   tasks:
-    - name: Update Apt, Install Packages, Force use of apt-get because apt sucks.
+    - name: Update Apt.
       apt: name=aptitude update_cache=yes state=latest force_apt_get=yes
 
 # User + Group Setup
-    - name: Make sure we have a 'sudo' group
+    - name: Verify 'sudo' group
       group:
         name: sudo
         state: present
 
-    - name: Allow 'sudo' group to have passwordless sudo
+    - name: Allow paswordless sudo to sudoers group.
       lineinfile:
         path: /etc/sudoers
         state: present
@@ -29,7 +42,10 @@
         append: true
         create_home: true
         shell: /bin/bash
-#        password: '*'
+
+    - name: Print message.
+      ansible.builtin.debug:
+        msg: 'Setting hostname to: {{ hostname }}'
 
     - name: Set a hostname
       hostname:
@@ -44,7 +60,7 @@
         upgrade: 'yes'
 
     - name: Install Default Packages.
-      apt: name={{ sys_packages }} state=latest
+      apt: name={{ apt_packages }} state=latest
 
     - name: Remove ubuntu spyware
       apt:
@@ -96,7 +112,7 @@
       authorized_key:
         user: "{{ user_name }}"
         state: present
-        key: "{{ copy_local_key }}"
+        key: "{{ copy_pub_key }}"
 
     - name: Add hardened SSH config
       copy:

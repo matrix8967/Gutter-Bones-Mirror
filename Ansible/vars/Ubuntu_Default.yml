@@ -1,6 +1,4 @@
 ---
-user_name: whiterose
-hostname: utils
-ssh_port: '8967'
-copy_local_key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
-sys_packages: ['git', 'iftop', 'nmap', 'curl', 'ipcalc', 'ncdu', 'pwgen', 'htop', 'wavemon', 'vim', 'tmux', 'fail2ban', 'tldr', 'neofetch', 'zsh', 'fonts-powerline', 'flatpak', 'ruby-full', 'build-essential', 'zlib1g-dev', 'tmux-plugin-manager', 'exfat-fuse', 'exfat-utils', 'taskwarrior', 'openvpn', 'dialog', 'python3-pip', 'python3-setuptools', 'libclang-dev', 'cifs-utils', 'neovim', 'nfs-common', 'speedtest-cli', 'tree', 'vis', 'ncmpcpp', 'mpc', 'figlet', 'asciinema', 'net-tools', 'powertop', 'neovim', 'nmon', 'ncdu', 'tcpdump', 'mc', 'wireshark', 'most', 'imagemagick', 'ufw', 'ifstat', 'goaccess', 'wireguard-tools', 'qrencode', 'lsb-release', 'wget', 'apt-transport-https']
+copy_pub_key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+apt_packages: ['git', 'iftop', 'nmap', 'curl', 'ipcalc', 'ncdu', 'pwgen', 'htop', 'wavemon', 'vim', 'tmux', 'fail2ban', 'tldr', 'neofetch', 'zsh', 'fonts-powerline', 'flatpak', 'ruby-full', 'build-essential', 'zlib1g-dev', 'tmux-plugin-manager', 'exfat-fuse', 'exfat-utils', 'taskwarrior', 'openvpn', 'dialog', 'python3-pip', 'python3-setuptools', 'libclang-dev', 'cifs-utils', 'neovim', 'nfs-common', 'speedtest-cli', 'tree', 'vis', 'ncmpcpp', 'mpc', 'figlet', 'asciinema', 'net-tools', 'powertop', 'neovim', 'nmon', 'ncdu', 'tcpdump', 'mc', 'wireshark', 'most', 'imagemagick', 'ufw', 'ifstat', 'goaccess', 'wireguard-tools', 'qrencode', 'lsb-release', 'wget', 'apt-transport-https']
