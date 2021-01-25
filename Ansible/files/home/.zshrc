@@ -18,9 +18,7 @@ export ZSH="/home/$USER/.oh-my-zsh"
 
 ZSH_THEME=powerlevel10k/powerlevel10k
 
-#plugins=(git zsh-syntax-highlighting tmux taskwarrior systemd ssh-agent rsync python pylint pyenv pip oc nmap minikube microk8s git-extras docker cp cargo ansible adb)
-
-plugins=(adb ansible cargo colored-man-pages colorize cp docker docker-compose git git-extras httpie microk8s minikube nmap oc pip pyenv pylint python rsync ssh-agent systemadmin systemd taskwarrior tmux tmux-cssh zsh-syntax-highlighting)
+plugins=(adb ansible cargo colored-man-pages colorize cp docker docker-compose git git-extras httpie microk8s minikube nmap oc pip pyenv pylint python rsync ssh-agent systemadmin systemd taskwarrior tmux tmux-cssh zsh-syntax-highlighting zsh-autosuggestions)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -55,15 +53,15 @@ export PATH=$PATH:~/.cargo/bin/
 
 # =====Aliases===== #
 
-alias nano='vim'
-alias pls='sudo'
-alias ls='lsd'
+#alias ls='lsd'
 alias l='ls -l'
 alias la='ls -a'
 alias lla='ls -la'
 alias lt='ls --tree'
-# alias icat='kitty +kitten icat'
 alias dm='dmesg -HTL'
+alias nano='vim'
+alias pls='sudo'
+# alias icat='kitty +kitten icat'
 
 # =====Zsh Opts===== #
 
