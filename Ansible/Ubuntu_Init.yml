@@ -67,11 +67,14 @@
         name: popularity-contest
         state: absent
 
-        #    - name: Run Script
-        #      ansible.builtin.script:
-        #        cmd: ./scripts/Dev.sh
-        #      become: yes
-        #      become_user: "{{ user_name }}"
+      #    - name: Run Script
+      #      ansible.builtin.script: 
+      #        cmd: scripts/Auto.sh
+      #        ignore_errors: true
+      #        args:
+      #          executable: /bin/bash
+          #            become: true
+          #            become_user: "{{ user_name }}"
 
     - name: Copy Dotfiles
       copy:
