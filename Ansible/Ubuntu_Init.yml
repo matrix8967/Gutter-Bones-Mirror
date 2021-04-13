@@ -1,4 +1,4 @@
-- hosts: all
+- hosts: ubuntu
   become: true
   vars_files:
     - vars/Ubuntu_Default.yml
