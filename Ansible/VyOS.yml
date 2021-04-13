@@ -3,7 +3,7 @@
 - name: VyOS Playbook
   connection: ansible.netcommon.network_cli
   gather_facts: false
-  hosts: all
+  hosts: vyos
   tasks:
 
     - vyos.vyos.vyos_facts:
