@@ -1,9 +1,9 @@
 ---
 
-- name: VyOS Playbook
+- name: EdgeOS Playbook
   connection: ansible.netcommon.network_cli
   gather_facts: false
-  hosts: VyOS
+  hosts: edgerouter
   tasks:
 
     - vyos.vyos.vyos_facts:
