@@ -18,7 +18,7 @@ export ZSH="/home/$USER/.oh-my-zsh"
 
 ZSH_THEME=powerlevel10k/powerlevel10k
 
-plugins=(adb ansible cargo colored-man-pages colorize cp docker docker-compose git git-extras httpie microk8s minikube nmap oc pip pyenv pylint python rsync ssh-agent systemadmin systemd taskwarrior tmux tmux-cssh zsh-syntax-highlighting zsh-autosuggestions)
+plugins=(archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap osx pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp cargo bundler ansible adb)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -46,22 +46,10 @@ export PATH=$PATH:~/.cargo/bin/
 
 # =====Kitty Config===== #
 
-# autoload -Uz compinit
-# compinit
+autoload -Uz compinit
+compinit
 # Completion for kitty
-# kitty + complete setup zsh | source /dev/stdin
-
-# =====Aliases===== #
-
-#alias ls='lsd'
-alias l='ls -l'
-alias la='ls -a'
-alias lla='ls -la'
-alias lt='ls --tree'
-alias dm='dmesg -HTL'
-alias nano='vim'
-alias pls='sudo'
-# alias icat='kitty +kitten icat'
+kitty + complete setup zsh | source /dev/stdin
 
 # =====Zsh Opts===== #
 
@@ -74,15 +62,37 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' # case insensitive tab
 setopt appendhistory
 setopt histignorealldups
 setopt HIST_SAVE_NO_DUPS
-setopt HIST_IGNORE_DUPS
-#setopt hist_ignore_dups
-#setopt hist_ignore_space
-#setopt hist_verify
+setopt hist_expire_dups_first # delete duplicates first when HISTFILE size exceeds HISTSIZE
+setopt hist_ignore_dups       # ignore duplicated commands history list
+setopt hist_ignore_space      # ignore commands that start with space
+setopt hist_verify            # show command with history expansion to user before running it
+
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
+
+
+
+# =====Aliases===== #
+
+alias nano='vim'
+alias pls='sudo'
+alias l='ls -l'
+alias la='ls -a'
+alias lla='ls -la'
+alias lt='ls --tree'
+alias icat='kitty +kitten icat'
+alias dm='sudo dmesg -HTL'
+alias ls='lsd'
+#alias bat='batcat'
+alias rsync='rsync -azvhP -r --info=progress2'
+alias rsyncssh='rsync -e ssh'
+alias pubkey='cat ~/.ssh/id_rsa.pub'
+alias ipa='ip -color -brief -human addr'
+alias http='http --check-status --pretty=all --verbose'
 
 # =====Functions===== #
 
 function pvpn {
-	sudo protonvpn c -f
+        sudo protonvpn c -f
 }
 
 function amimullvad {
@@ -103,6 +113,22 @@ function ElecomDeftPro {
 
 function ElecomEX-GPro {
 	~/Scripts/./ElecomEX-GPro.sh
+}
+
+function hs {
+	history | grep "$1"
+}
+
+function keyrm {
+	ssh-keygen -f "/home/$USER/.ssh/known_hosts" -R "$1"
+}
+
+function printline {
+	awk '{print $0; system("sleep .3");}' "$1"
+}
+
+function psaux {
+	sudo ps awxf -eo pid,user,%cpu,%mem,args
 }
 
 # =====Blur for Kitty Term===== #
