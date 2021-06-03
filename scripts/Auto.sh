@@ -5,6 +5,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
+mv /home/$USER/.zshrc /home/$USER/.zshrc_backup
 
 function msg {
   echo -e "\x1B[1m$*\x1B[0m" >&2
@@ -308,3 +309,6 @@ git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 # Install Vundle.
 git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
 vim +PluginInstall +qall
+
+mv /home/$USER/.zshrc_backup /home/$USER/.zshrc
+sudo cp -r /home/$USER/.vim* /root/
