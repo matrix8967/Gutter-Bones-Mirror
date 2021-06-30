@@ -44,12 +44,27 @@ export PATH=$HOME/.gems/bin:$PATH
 
 export PATH=$PATH:~/.cargo/bin/
 
+# =====Editor===== #
+
+export EDITOR="/usr/bin/vim"
+
 # =====Kitty Config===== #
 
 autoload -Uz compinit
 compinit
 # Completion for kitty
 kitty + complete setup zsh | source /dev/stdin
+
+# =====Bat/Man===== #
+
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+#man 2 select
+MANROFFOPT="-c"
+
+# =====Docker===== #
+
+export PATH=/usr/bin:$PATH
+export DOCKER_HOST=unix:///run/user/1000/docker.sock
 
 # =====Zsh Opts===== #
 
@@ -67,9 +82,7 @@ setopt hist_ignore_dups       # ignore duplicated commands history list
 setopt hist_ignore_space      # ignore commands that start with space
 setopt hist_verify            # show command with history expansion to user before running it
 
-ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
-
-
+#ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=999'
 
 # =====Aliases===== #
 
@@ -83,11 +96,11 @@ alias icat='kitty +kitten icat'
 alias dm='sudo dmesg -HTL'
 alias ls='lsd'
 #alias bat='batcat'
-alias rsync='rsync -azvhP -r --info=progress2'
-alias rsyncssh='rsync -e ssh'
 alias pubkey='cat ~/.ssh/id_rsa.pub'
 alias ipa='ip -color -brief -human addr'
 alias http='http --check-status --pretty=all --verbose'
+alias netstat_def='sudo netstat -tlnp'
+alias rsync='rsync -razuvhLP --info=progress2'
 
 # =====Functions===== #
 
@@ -129,6 +142,11 @@ function printline {
 
 function psaux {
 	sudo ps awxf -eo pid,user,%cpu,%mem,args
+}
+
+function Quotes {
+	echo -e "a=7; echo \$a; echo \"\$a\"; echo '\$a'; echo \"'\$a'\"; echo '\"\$a\"'"
+	a=7; echo $a; echo "$a"; echo '$a'; echo "'$a'"; echo '"$a"'
 }
 
 # =====Blur for Kitty Term===== #
