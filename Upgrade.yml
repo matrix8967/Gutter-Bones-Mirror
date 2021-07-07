@@ -4,6 +4,14 @@
   hosts: all
     #    interpreter_python: python3
   tasks:
+
+    - name: Copy Dotfiles
+      copy:
+        dest: /home/{{ ansible_user }}/
+        src: home/
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
     # Upgrade RHEL family OS packages
     - name: Upgrade RHEL Family OS packages
       yum:
