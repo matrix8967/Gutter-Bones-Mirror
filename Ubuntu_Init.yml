@@ -1,5 +1,5 @@
 ---
-- hosts: all
+- hosts: [init]
   become: true
   vars_files:
     - vars/Ubuntu_Default.yml
