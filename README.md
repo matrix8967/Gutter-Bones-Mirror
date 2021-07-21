@@ -1,6 +1,6 @@
 Skeleton Scripts. Nowhere to go but up.
 
-_Always_ lots left `todo`: 
+_Always_ lots left `todo`:
 
 - [X] Adjust .gitignore for to make sure secrets aren't committed.
 - [X] Less hardcoded variables.
@@ -9,6 +9,7 @@ _Always_ lots left `todo`:
 - [ ] Finish converting scripts --> Ansible
 - [ ] SSH-2FA Auth
 - [ ] Create Role/Conf for `caddy.`
+- [ ] Automate `VPN` Setup / Connection(s) and Networking.
 
 ```
 ⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣴⣶⣶⣿⣿⣿⣿⣶⣶⣦⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀
