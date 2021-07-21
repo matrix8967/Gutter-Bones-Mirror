@@ -308,3 +308,8 @@ git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 # Install Vundle.
 git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
 vim +PluginInstall +qall
+
+# Misc 🧹
+
+mv ../.zshrc.pre-oh-my-zsh ../.zshrc
+sudo cp -r ../.vim* /root/

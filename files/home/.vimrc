@@ -51,7 +51,7 @@ let &t_ut=''
 
 " Colors
 syntax enable
-let g:dracula_colorterm = 0
-colorscheme dracula
+" let g:dracula_colorterm = 0
+" colorscheme dracula
 
 let g:airline_theme='deus'
