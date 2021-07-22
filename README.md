@@ -6,8 +6,9 @@ _Always_ lots left `todo`:
 - [X] Less hardcoded variables.
 - [X] Suck less @ `ansible-vault`.
 - [ ] Create `roles`.
-- [ ] Finish converting scripts --> Ansible
-- [ ] SSH-2FA Auth
+- [ ] Finish converting scripts --> Ansible.
+- [ ] Convert file transfers to Ansible Templates.
+- [ ] SSH-2FA Auth.
 - [ ] Create Role/Conf for `caddy.`
 - [ ] Automate `VPN` Setup / Connection(s) and Networking.
 
