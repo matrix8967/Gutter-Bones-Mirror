@@ -1,7 +1,0 @@
-system:
-  aco: true
-  disable_compositor: true
-  game_path: ~/Games/Games/Lutris
-  reset_desktop: true
-  sdl_video_fullscreen: '1'
-  terminal_app: /usr/bin/kitty
