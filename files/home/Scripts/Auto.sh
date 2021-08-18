@@ -4,7 +4,7 @@ set -eE
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
-
+MANJARO=$(cat Pkglists/Manjaro.txt)
 
 function msg {
   echo -e "\x1B[1m$*\x1B[0m" >&2
@@ -200,93 +200,7 @@ elif [[ "${ID}" =~ "fedora" ]] || [[ "${ID_LIKE}" =~ "fedora" ]]; then
     pipx \
 
 elif [[ "${ID}" =~ "arch" ]] || [[ "${ID_LIKE}" =~ "arch" ]]; then
-    sudo pacman -S \
-    iftop \
-    glances \
-    ipcalc \
-    ncdu \
-    pwgen \
-    wavemon \
-    vim \
-    tmux \
-    fail2ban \
-    tldr \
-    s-tui \
-    neofetch \
-    tilix \
-    gparted \
-    guake \
-    kitty \
-    task \
-    bat \
-    lsd \
-    dialog \
-    neovim \
-    tree \
-    vis \
-    ncmpcpp \
-    mpc \
-    figlet \
-    chafa \
-    asciinema \
-    awesome-terminal-fonts \
-    powerline-fonts \
-    powerline-vim \
-    arc-gtk-theme \
-    unzip \
-    xorg-xinput \
-    lolcat \
-    papirus-icon-theme \
-    mlocate \
-    gnome-disk-utility \
-    most \
-    xdotool \
-    piper \
-    httpie \
-    rust \
-    wireshark-cli \
-    wireshark-qt \
-    speedtest-cli \
-    appimagelauncher \
-    go \
-    lm_sensors \
-    powerline \
-    powerline-vim \
-    powerline-common \
-    powerline-fonts \
-    python-gobject \
-    gtk3 \
-    libappindicator-gtk3 \
-    libnotify \
-    polkit \
-    virt-manager \
-    libvirt \
-    kate \
-    dolphin-emu \
-    dolphin-plugins \
-    pcsx2 \
-    scummvm \
-    scummvm-tools \
-    ppsspp \
-    htop \
-    brave \
-    dnssec-tools \
-    net-tools \
-    qemu \
-    virt-manager \
-    virt-viewer \
-    dnsmasq \
-    vde2 \
-    bridge-utils \
-    openbsd-netcat \
-    ebtables \
-    iptables \
-    libguestfs \
-    python-pip \
-    python-wheel \
-    bootsplash-theme-arch \
-    tlpui \
-    zsh \
+  sudo pacman -S $MANJARO
 
 else
   msg "Unknown system ID: ${ID}"
@@ -302,14 +216,11 @@ git clone https://github.com/romkatv/powerlevel10k.git ~/.oh-my-zsh/themes/power
 git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
 git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
 
+
 # Install Tmux
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 
 # Install Vundle.
 git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
 vim +PluginInstall +qall
-
-# Misc 🧹
-
-mv ../.zshrc.pre-oh-my-zsh ../.zshrc
-sudo cp -r ../.vim* /root/
+sudo cp -r /home/$USER/.vim* /root/
