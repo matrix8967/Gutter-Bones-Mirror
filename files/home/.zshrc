@@ -149,6 +149,23 @@ function Quotes {
 	a=7; echo $a; echo "$a"; echo '$a'; echo "'$a'"; echo '"$a"'
 }
 
+function cpu_temp()
+{
+  # Init result
+  local result=0.00
+  # The first line of this file is x1000.
+  # Read the first line from the file.
+  line=$(head -n 1 /sys/class/thermal/thermal_zone0/temp)
+  # Test if the string is an integer as expected with a regex.
+  if [[ $line =~ ^-?[0-9]+$ ]]
+  then
+    # Convert temp to Celcius & store as string.
+    result=$(awk "BEGIN {printf \"%.2f\n\", $line/1000}")
+  fi
+  # The gud gud. Or maybe bad bad?
+  echo -e "Current CPU Temp is: $result°C"
+}
+
 # =====Blur for Kitty Term===== #
 
 # if [[ $(ps --no-header -p $PPID -o comm) =~ '^yakuake|kitty$' ]]; then
