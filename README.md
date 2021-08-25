@@ -11,8 +11,9 @@ _Always_ lots left `todo`:
 -   [ ] SSH-2FA Auth
 -   [ ] Create Role/Conf for `caddy.`
 -   [ ] Automate `VPN` Setup / Connection(s) and Networking.
+-   [ ] Add Fedora/RHEL `se-linux` / `firewall-cmd` + `sshd_conf` steps to the installation.
 
-
+```
     ⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣴⣶⣶⣿⣿⣿⣿⣶⣶⣦⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀
     ⠀⠀⠀⠀⠀⢀⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⡀⠀⠀⠀⠀⠀
     ⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀
@@ -28,3 +29,4 @@ _Always_ lots left `todo`:
     ⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⡟⢻⣿⣿⣿⣿⡟⢻⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀
     ⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⡇⢸⣿⣿⣿⣿⡇⢸⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀
     ⠀⠀⠀⠀⠀⠀⠈⠿⣿⣿⡿⠃⠘⢿⣿⣿⡿⠃⠘⢿⣿⣿⠿⠁
+```
