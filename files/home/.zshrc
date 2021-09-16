@@ -18,7 +18,7 @@ export ZSH="/home/$USER/.oh-my-zsh"
 
 ZSH_THEME=powerlevel10k/powerlevel10k
 
-plugins=(archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap osx pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp cargo bundler ansible adb)
+plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap osx pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp cargo bundler ansible adb)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -54,6 +54,7 @@ autoload -Uz compinit
 compinit
 # Completion for kitty
 kitty + complete setup zsh | source /dev/stdin
+# zinit light redxtech/zsh-kitty
 
 # =====Bat/Man===== #
 
@@ -94,13 +95,16 @@ alias lla='ls -la'
 alias lt='ls --tree'
 alias icat='kitty +kitten icat'
 alias dm='sudo dmesg -HTL'
-# alias ls='lsd'
-# alias bat='batcat'
+alias ls='lsd'
+#alias bat='batcat'
 alias pubkey='cat ~/.ssh/id_rsa.pub'
 alias ipa='ip -color -brief -human addr'
 alias http='http --check-status --pretty=all --verbose'
 alias netstat_def='sudo netstat -tlnp'
-alias rsync='rsync -razuvhLP --info=progress2'
+alias rsync='rsync -razuvhLP'
+alias tree='tree -shuC'
+alias wifi_scan='nmcli device wifi list'
+alias cat='bat -pp'
 
 # =====Functions===== #
 
@@ -164,6 +168,22 @@ function cpu_temp()
   fi
   # The gud gud. Or maybe bad bad?
   echo -e "Current CPU Temp is: $result°C"
+}
+
+function Gitlab_Pull {
+	for dir in ~/Git/Gitlab/*/; do
+		git -C $dir pull
+	done
+}
+
+function Github_Pull {
+	for dir in ~/Git/Github/*/; do
+		git -C $dir pull
+	done
+}
+
+function strip_IPs {
+	sed -E -r 's/(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/$IP_ADDRESSES/g' $1
 }
 
 # =====Blur for Kitty Term===== #
