@@ -11,6 +11,8 @@
         src: home/
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
+      tags:
+        - dots
 
     # Upgrade RHEL family OS packages
     - name: Upgrade RHEL Family OS packages
@@ -18,12 +20,16 @@
         name: '*'
         state: latest
       when: ansible_os_family == "RedHat"
+      tags:
+        - rpms
 
     # Debian Family upgrade
     - name: Update repositories cache
       apt:
         update_cache: yes
       when: ansible_os_family == "Debian"
+      tags:
+        - debs
     - name: Update all packages to their latest version
       apt:
         name: "*"
@@ -33,4 +39,3 @@
       apt:
         upgrade: dist
       when: ansible_os_family == "Debian"
-

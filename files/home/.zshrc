@@ -18,7 +18,7 @@ export ZSH="/home/$USER/.oh-my-zsh"
 
 ZSH_THEME=powerlevel10k/powerlevel10k
 
-plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap osx pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp cargo bundler ansible adb)
+plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap macos pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp cargo bundler ansible adb)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -58,9 +58,9 @@ kitty + complete setup zsh | source /dev/stdin
 
 # =====Bat/Man===== #
 
-export MANPAGER="sh -c 'col -bx | bat -l man -p'"
-#man 2 select
-MANROFFOPT="-c"
+# export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+# man 2 select
+# MANROFFOPT="-c"
 
 # =====Docker===== #
 
@@ -95,8 +95,8 @@ alias lla='ls -la'
 alias lt='ls --tree'
 alias icat='kitty +kitten icat'
 alias dm='sudo dmesg -HTL'
-# alias ls='lsd'
-# alias bat='batcat'
+alias ls='lsd'
+#alias bat='batcat'
 alias pubkey='cat ~/.ssh/id_rsa.pub'
 alias ipa='ip -color -brief -human addr'
 alias http='http --check-status --pretty=all --verbose'
