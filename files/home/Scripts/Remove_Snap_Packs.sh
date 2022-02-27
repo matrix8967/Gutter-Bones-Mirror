@@ -8,4 +8,16 @@ NC='\033[0m' # No Color
 sudo snap remove lxd
 sudo snap remove core18
 sudo snap remove snapd
-sudo apt purge snapd
+
+sudo apt autoremove --purge snapd
+
+sudo rm -rf /var/cache/snapd/
+
+cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref
+# To prevent repository packages from triggering the installation of Snap,
+# this file forbids snapd from being installed by APT.
+
+Package: snapd
+Pin: release a=*
+Pin-Priority: -10
+EOF
