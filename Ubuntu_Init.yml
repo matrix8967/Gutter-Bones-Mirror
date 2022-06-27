@@ -2,7 +2,7 @@
 - hosts: [all]
   become: true
   vars_files:
-    - vars/Ubuntu_Default.yml
+    - group_vars/Ubuntu_Default.yml
 
   vars_prompt:
     - name: "user_name"

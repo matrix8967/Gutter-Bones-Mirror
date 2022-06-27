@@ -24,7 +24,7 @@
       - eth6
       - switch0
       - lo
-
+      
     - name: Print return information from the previous task
       ansible.builtin.debug:
         var: result
