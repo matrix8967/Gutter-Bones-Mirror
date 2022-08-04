@@ -22,7 +22,6 @@ build-essential
 zlib1g-dev
 tmux-plugin-manager
 exfat-fuse
-exfat-utils
 taskwarrior
 bat
 openvpn

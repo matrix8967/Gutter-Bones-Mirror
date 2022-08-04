@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
 sudo snap remove lxd
-sudo snap remove core18
+sudo snap remove core20
 sudo snap remove snapd
 
 sudo apt autoremove --purge snapd
