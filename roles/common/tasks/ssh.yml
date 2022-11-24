@@ -1,0 +1,16 @@
+---
+# SSH Key Exchange & Service Reload
+    - name: SSH Key Exchange.
+      authorized_key:
+        user: "{{ user_name }}"
+        state: present
+        key: "{{ copy_pub_key }}"
+
+    - name: Add hardened SSH config
+      copy:
+        dest: /etc/ssh/sshd_config
+        src: etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: 0600
+      notify: Reload SSH

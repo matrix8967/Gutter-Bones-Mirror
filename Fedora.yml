@@ -38,7 +38,7 @@
       hostname:
         name: "{{ hostname }}"
 
-    # Upgrade RHEL family OS packages
+# Upgrade RHEL family OS packages
     - name: Upgrade RHEL Family OS packages
       yum:
         name: '*'

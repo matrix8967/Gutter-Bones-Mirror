@@ -1,0 +1,11 @@
+---
+# UFW Setup
+    - ufw:
+        rule: allow
+        port: "{{ ssh_port }}"
+
+    - name: UFW - Deny all except SSH.
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
