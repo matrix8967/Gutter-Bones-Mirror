@@ -2,7 +2,6 @@
 - name: Upgrade and Reboot RHEL & Debian family Linux distros
   become: true
   hosts: all
-    #    interpreter_python: python3
   tasks:
 
     - name: Copy Dotfiles

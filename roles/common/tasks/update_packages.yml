@@ -1,0 +1,43 @@
+---
+- name: Upgrade RHEL Family OS packages
+  yum:
+    name: '*'
+    state: latest
+  when: ansible_os_family == "RedHat"
+  tags:
+    - rpms
+
+# Upgrade ARCH family OS packages
+- name: Upgrade Arch Family OS packages
+  pacman:
+    update_cache: yes
+    state: latest
+  when: ansible_os_family == "Archlinux"
+  tags:
+    - pacman
+
+# Upgrade ARCH family OS packages
+- name: Upgrade Arch Family OS packages
+  pacman:
+    upgrade: yes
+    state: latest
+  when: ansible_os_family == "Archlinux"
+  tags:
+    - pacman
+
+# Debian Family upgrade
+- name: Update repositories cache
+  apt:
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+  tags:
+    - debs
+- name: Update all packages to their latest version
+  apt:
+    name: "*"
+    state: latest
+  when: ansible_os_family == "Debian"
+- name: Upgrade the OS (apt-get dist-upgrade)
+  apt:
+    upgrade: dist
+  when: ansible_os_family == "Debian"
