@@ -1,9 +1,0 @@
----
-    - name: Create User.
-      user:
-        name: "{{ user_name }}"
-        state: present
-        groups: sudo
-        append: true
-        create_home: true
-        shell: /usr/bin/zsh

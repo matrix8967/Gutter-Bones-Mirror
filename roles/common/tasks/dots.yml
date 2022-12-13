@@ -1,7 +1,0 @@
----
-    - name: Copy Dotfiles
-      copy:
-        dest: /home/{{ user_name }}/
-        src: home/
-        owner: "{{ user_name }}"
-        group: "{{ user_name }}"

@@ -3,12 +3,8 @@
   become: true
   hosts: all
   vars_files:
-    - group_vars/debian
-  roles:
-    - common
-    - debian
+    - group_vars/debian.yml
   tasks:
-
     - name: Update Apt.
       apt: name=aptitude update_cache=yes state=latest force_apt_get=yes
       
