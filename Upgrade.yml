@@ -32,15 +32,6 @@
       tags:
         - pacman
 
-    # # Upgrade ARCH family OS packages
-    # - name: Upgrade Arch Family OS packages
-    #   pacman:
-    #     upgrade: yes
-    #     state: latest
-    #   when: ansible_os_family == "Archlinux"
-    #   tags:
-    #     - pacman
-
     # Debian Family upgrade
     - name: Update repositories cache
       apt:
