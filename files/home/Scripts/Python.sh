@@ -11,3 +11,4 @@ pip3 install --user pmbootstrap --upgrade
 pip3 install --user bpytop --upgrade
 pip3 install --user paramiko --upgrade
 pip3 install --user argcomplete --upgrade
+pip3 install --user tk --upgrade

@@ -3,7 +3,6 @@
   become: true
   hosts: all
   tasks:
-
     - name: Copy Dotfiles
       copy:
         dest: /home/{{ ansible_user }}/
@@ -16,7 +15,7 @@
     # Upgrade RHEL family OS packages
     - name: Upgrade RHEL Family OS packages
       yum:
-        name: '*'
+        name: "*"
         state: latest
       when: ansible_os_family == "RedHat"
       tags:

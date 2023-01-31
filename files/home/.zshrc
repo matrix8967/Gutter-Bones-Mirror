@@ -2,11 +2,10 @@
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block, everything else may go below.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+	source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
 export TERM="xterm-256color"
-
 POWERLEVEL9K_MODE='nerdfont-complete'
 
 # =====SSH-Agent===== #
@@ -18,7 +17,7 @@ export ZSH="/home/$USER/.oh-my-zsh"
 
 ZSH_THEME=powerlevel10k/powerlevel10k
 
-plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap macos pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp rust bundler ansible adb)
+plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmapmacos pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp rust bundler autoupdate ansible adb)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -58,7 +57,7 @@ kitty + complete setup zsh | source /dev/stdin
 
 # =====Bat/Man===== #
 
-# export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
 # man 2 select
 # MANROFFOPT="-c"
 
@@ -66,6 +65,16 @@ kitty + complete setup zsh | source /dev/stdin
 
 export PATH=/usr/bin:$PATH
 export DOCKER_HOST=unix:///run/user/1000/docker.sock
+
+# =====PostmarketOS===== #
+
+autoload bashcompinit
+bashcompinit
+eval "$(register-python-argcomplete pmbootstrap)"
+
+# =====Ansible===== #
+
+export ANSIBLE_NOCOWS=1
 
 # =====Zsh Opts===== #
 
@@ -96,7 +105,7 @@ alias lt='ls --tree'
 alias icat='kitty +kitten icat'
 alias dm='sudo dmesg -HTL'
 alias ls='lsd'
-alias bat='batcat'
+#alias bat='batcat'
 alias pubkey='cat ~/.ssh/id_rsa.pub'
 alias ipa='ip -color -brief -human addr'
 alias http='http --check-status --pretty=all --verbose'
@@ -105,11 +114,13 @@ alias rsync='rsync -razuvhLP'
 alias tree='tree -shuC'
 alias wifi_scan='nmcli device wifi list'
 alias cat='bat -pp'
+alias db9='screen -dmLS USG-screen /dev/ttyUSB0 115200,cs8'
+alias lsssh='ps aux | egrep "sshd: [a-zA-Z]+@"'
 
 # =====Functions===== #
 
 function pvpn {
-        sudo protonvpn c -f
+	sudo protonvpn c -f
 }
 
 function amimullvad {
@@ -144,6 +155,16 @@ function printline {
 	awk '{print $0; system("sleep .3");}' "$1"
 }
 
+function typer {
+	text="$1"
+	delay="$2"
+
+	for i in $(seq 0 $(expr length "${text}")) ; do
+		echo -n "${text:$i:1}"
+		sleep ${delay}
+	done
+}
+
 function psaux {
 	sudo ps awxf -eo pid,user,%cpu,%mem,args
 }
@@ -155,19 +176,19 @@ function Quotes {
 
 function cpu_temp()
 {
-  # Init result
-  local result=0.00
-  # The first line of this file is x1000.
-  # Read the first line from the file.
-  line=$(head -n 1 /sys/class/thermal/thermal_zone0/temp)
-  # Test if the string is an integer as expected with a regex.
-  if [[ $line =~ ^-?[0-9]+$ ]]
-  then
-    # Convert temp to Celcius & store as string.
-    result=$(awk "BEGIN {printf \"%.2f\n\", $line/1000}")
-  fi
-  # The gud gud. Or maybe bad bad?
-  echo -e "Current CPU Temp is: $result°C"
+	# Init result
+	local result=0.00
+	# The first line of this file is x1000.
+	# Read the first line from the file.
+	line=$(head -n 1 /sys/class/thermal/thermal_zone0/temp)
+	# Test if the string is an integer as expected with a regex.
+	if [[ $line =~ ^-?[0-9]+$ ]]
+	then
+		# Convert temp to Celcius & store as string.
+		result=$(awk "BEGIN {printf \"%.2f\n\", $line/1000}")
+	fi
+	# The gud gud. Or maybe bad bad?
+	echo -e "Current CPU Temp is: $result°C"
 }
 
 function Gitlab_Pull {
@@ -184,6 +205,31 @@ function Github_Pull {
 
 function strip_IPs {
 	sed -E -r 's/(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/$IP_ADDRESSES/g' $1
+}
+
+function spotifydl {
+	spotify_dl -k -w -l "$1" -o ~/Music
+}
+
+function vid_dl {
+	ffmpeg -user_agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/601.7.8(KHTML, like Gecko) Version/9.1.3 Safari/537.86.7" -i $1 -c:v copy -c:a copy -f mpegts "$2"
+}
+
+function ADB_Text {
+	text=$(printf '%s%%s' ${@})
+	text=${text%%%s}
+	text=${text//\'/\\\'}
+	text=${text//\"/\\\"}
+	adb shell input text "$text"
+	adb shell input keyevent 66
+}
+
+function rpi_bl_off {
+	sudo chown -R $USER:$USER /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power && echo 1 > /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power
+}
+
+function rpi_bl_on {
+        sudo chown -R $USER:$USER /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power && echo 0 > /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power
 }
 
 # =====Blur for Kitty Term===== #

@@ -4,11 +4,14 @@ set -eE
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
-
-sudo snap remove lxd
-sudo snap remove core20
-sudo snap remove snapd
-
+sudo pro config set apt_news=false
+sudo snap remove --purge lxd
+sudo snap remove --purge snap-store
+sudo snap remove --purge core20
+sudo snap remove --purge bare
+sudo snap remove --purge snapd
+sudo apt remove -y --purge snapd
+sudo apt-mark hold snapd # avoid install snapd again
 sudo apt autoremove --purge snapd
 
 sudo rm -rf /var/cache/snapd/
