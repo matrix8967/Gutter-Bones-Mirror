@@ -5,10 +5,10 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-DEBIAN=$(cat Pkglists/Debian.txt)
-MANJARO=$(cat Pkglists/Manjaro.txt)
-FEDORA=$(cat Pkglists/Fedora.txt)
-RHEL=$(cat Pkglists/RHEL.txt)
+DEBIAN=$(cat .Debian.txt)
+MANJARO=$(cat .Manjaro.txt)
+FEDORA=$(cat .Fedora.txt)
+RHEL=$(cat .RHEL.txt)
 
 function msg {
 	echo -e "\x1B[1m$*\x1B[0m" >&2
@@ -23,7 +23,7 @@ if [[ "${ID}" =~ "debian" ]] || [[ "${ID_LIKE}" =~ "debian" ]]; then
 	sudo apt-get install $DEBIAN
 
 elif [[ "${ID}" =~ "rhel" ]] || [[ "${ID_LIKE}" =~ "fedora" ]]; then
-	../Misc/RHEL_RPM_Fusion_Setup.sh && sudo dnf install $RHEL
+	sudo dnf install $RHEL && echo -e $GREEN "Install RPM Fusion Repos with Attached Setup Scripts." $NC
 
 elif [[ "${ID}" =~ "fedora" ]] || [[ "${ID_LIKE}" =~ "fedora" ]]; then
         sudo dnf install $FEDORA
@@ -56,15 +56,10 @@ git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/p
 git clone https://github.com/redxtech/zsh-kitty ~/.oh-my-zsh/custom/plugins/zsh-kitty
 git clone https://github.com/TamCore/autoupdate-oh-my-zsh-plugins ~/.oh-my-zsh/custom/plugins/autoupdate
 
-cp ../Configs/Shell/zshrc ~/.zshrc
-cp ../Configs/Shell/p10k.zsh ~/.p10k.zsh
-
 # Install Tmux
-cp ../Configs/Shell/tmux.conf ~/.tmux.conf
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 
 # Install Vundle.
 git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
-cp ../Configs/Shell/vimrc ~/.vimrc
 vim +PluginInstall +qall
 sudo cp -r /home/$USER/.vim* /root/
