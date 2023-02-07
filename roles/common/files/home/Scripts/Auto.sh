@@ -5,10 +5,10 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-DEBIAN=$(cat .Debian.txt)
-MANJARO=$(cat .Manjaro.txt)
-FEDORA=$(cat .Fedora.txt)
-RHEL=$(cat .Fedora.txt)
+DEBIAN=$(cat Pkglists/Debian.txt)
+MANJARO=$(cat Pkglists/Manjaro.txt)
+FEDORA=$(cat Pkglists/Fedora.txt)
+RHEL=$(cat Pkglists/RHEL.txt)
 
 function msg {
 	echo -e "\x1B[1m$*\x1B[0m" >&2
