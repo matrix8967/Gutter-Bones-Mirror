@@ -1,0 +1,149 @@
+---
+- hosts: [all]
+  become: true
+  vars_files:
+    - ../group_vars/rhel.yml
+
+  vars_prompt:
+    - name: "user_name"
+      prompt: Desired username?
+      private: no
+
+    - name: "hostname"
+      prompt: Desired hostname?
+      private: no
+
+  tasks:
+
+# User + Group Setup
+    - name: Verify 'sudo' group
+      group:
+        name: sudo
+        state: present
+
+    - name: Create User.
+      user:
+        name: "{{ user_name }}"
+        state: present
+        groups: sudo
+        append: true
+        create_home: true
+        shell: /usr/bin/zsh
+
+    - name: Print message.
+      ansible.builtin.debug:
+        msg: 'Setting hostname to: {{ hostname }}'
+
+    - name: Set a hostname
+      hostname:
+        name: "{{ hostname }}"
+
+# Upgrade RHEL family OS packages
+    - name: Upgrade RHEL Family OS packages
+      yum:
+        name: '*'
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Install RHEL Packages
+      yum:
+        name: "{{ dnf_packages }}"
+        state: 'latest'
+
+    - name: Check if a reboot is needed.
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Reboot the server if needed
+      reboot:
+        msg: "Reboot initiated by Ansible because of reboot required file."
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: whoami
+      when: reboot_required.stat.exists
+
+    - name: Copy Dotfiles
+      copy:
+        dest: /home/{{ user_name }}/
+        src: ../roles/common/files/home/
+        owner: "{{ user_name }}"
+        group: "{{ user_name }}"
+
+    - name: Delete MOTD
+      file:
+        path: /etc/update-motd.d/
+        state: absent
+
+    - name: Create MOTD
+      file:
+        path: /etc/update-motd.d/
+        state: directory
+
+    - name: Setup new motd
+      copy:
+        dest: /etc/update-motd.d/10-motd
+        src: ../roles/common/files/etc/update-motd.d/10-motd
+        owner: root
+        group: root
+        mode: a+x
+
+# UFW Setup
+#    - ufw:
+#        rule: allow
+#        port: "{{ ssh_port }}"
+
+          #    - name: UFW - Deny all except SSH.
+          #      ufw:
+          #        state: enabled
+          #        policy: deny
+          #        direction: incoming
+
+# SSH Key Exchange & Service Reload
+    - name: SSH Key Exchange.
+      authorized_key:
+        user: "{{ user_name }}"
+        state: present
+        key: "{{ copy_pub_key }}"
+
+    - name: Add hardened SSH config
+      copy:
+        dest: /etc/ssh/sshd_config
+        src: ../roles/common/files/etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: 0600
+      notify: Reload SSH
+
+  handlers:
+    - name: Reload SSH
+      service:
+        name: sshd
+        state: reloaded
+
+    - name: Add SSH port to internal zone
+        ansible.posix.firewalld:
+          zone: internal
+          service: ssh
+          state: enabled
+          immediate: yes
+          permanent: yes
+
+    - name: Add permitted networks to internal zone
+        ansible.posix.firewalld:
+          zone: internal
+          source: "{{ item }}"
+          state: enabled
+          immediate: yes
+          permanent: yes
+        with_items: "{{ allowed_ssh_networks }}"
+
+    - name: Drop ssh from the public zone
+        ansible.posix.firewalld:
+          zone: public
+          service: ssh
+          state: disabled
+          immediate: yes
+          permanent: yes

@@ -2,7 +2,7 @@
 - hosts: [all]
   become: true
   vars_files:
-    - group_vars/main.yml
+    - group_vars/init.yml
   vars_prompt:
     - name: "user_name"
       prompt: Desired username?
@@ -48,7 +48,7 @@
       hostname:
         name: "{{ hostname }}"
 
-    # Package Install
+# Package Install
     - name: Update Apt.
       apt: name=aptitude update_cache=yes state=latest force_apt_get=yes
 
@@ -116,7 +116,7 @@
         group: root
         mode: a+x
 
-    # UFW Setup
+# UFW Setup
     - ufw:
         rule: allow
         port: "{{ ssh_port }}"
@@ -127,7 +127,7 @@
         policy: deny
         direction: incoming
 
-    # SSH Key Exchange & Service Reload
+# SSH Key Exchange & Service Reload
     - name: SSH Key Exchange.
       authorized_key:
         user: "{{ user_name }}"
