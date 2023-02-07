@@ -1,12 +1,14 @@
 ---
-- name: Manage public ports with firewalld ansible module 
+- name: Manage public ports with firewalld ansible module
   hosts: [rhel]
   gather_facts: no
-  become: truevars:
+  become: true
+vars:
     port_list:
-      - { port: 8181/tcp, state: enabled }
+      - { port: 8967/tcp, state: enabled }
       - { port: 9191/tcp, state: disabled }
-      - { port: 5050/udp, state: enabled }tasks:
+      - { port: 5050/udp, state: enabled }
+tasks:
     - name: Enable ports on the list
       firewalld:
         zone: public
@@ -16,7 +18,8 @@
       loop:
         "{{ port_list }}"
       notify:
-        - Restart firewalldhandlers:
+        - Restart firewalld
+handlers:
     - name: Restart firewalld
       service:
         name: firewalld
