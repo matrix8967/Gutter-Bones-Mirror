@@ -1,8 +1,10 @@
 ---
 - hosts: [all]
+  roles:
+  - ../roles/init
   become: true
   vars_files:
-    - group_vars/init.yml
+    - ../group_vars/init.yml
   vars_prompt:
     - name: "user_name"
       prompt: Desired username?
@@ -94,7 +96,7 @@
     - name: Copy Dotfiles
       copy:
         dest: /home/{{ user_name }}/
-        src: home/
+        src: ../roles/common/files/home/
         owner: "{{ user_name }}"
         group: "{{ user_name }}"
 
@@ -111,7 +113,7 @@
     - name: Setup new motd
       copy:
         dest: /etc/update-motd.d/10-motd
-        src: etc/update-motd.d/10-motd
+        src: ../roles/common/files/etc/update-motd.d/10-motd
         owner: root
         group: root
         mode: a+x
@@ -137,7 +139,7 @@
     - name: Add hardened SSH config
       copy:
         dest: /etc/ssh/sshd_config
-        src: etc/ssh/sshd_config
+        src: ../roles/common/files/etc/ssh/sshd_config
         owner: root
         group: root
         mode: 0600
