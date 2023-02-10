@@ -8,11 +8,11 @@
   vars_prompt:
     - name: "user_name"
       prompt: Desired username?
-      private: no
+      private: false
 
     - name: "hostname"
       prompt: Desired hostname?
-      private: no
+      private: false
 
   tasks:
 
@@ -91,63 +91,19 @@
         group: root
         mode: a+x
 
-    # - name: Add SSH port to internal zone
-    #     firewalld:
-    #       zone: internal
-    #       service: ssh
-    #       state: enabled
-    #       immediate: yes
-    #       permanent: yes
-    #   ignore_errors: yes
-
-    # - name: Add permitted networks to internal zone
-    #     firewalld:
-    #       zone: internal
-    #       source: "{{ item }}"
-    #       state: enabled
-    #       immediate: yes
-    #       permanent: yes
-    #     with_items: "{{ allowed_ssh_networks }}"
-    #   ignore_errors: yes
-
-    # - name: Drop ssh from the public zone
-    #     firewalld:
-    #       zone: public
-    #       service: ssh
-    #       state: disabled
-    #       immediate: yes
-    #       permanent: yes
-    #   ignore_errors: yes
-
-    # - name: tcp ports facts
-    #   listen_ports_facts:
-
-    # - name: Add ports to firewall
-    #   firewalld:
-    #     port: "{{ item }}/tcp"
-    #     state: enabled
-    #     immediate: true
-    #     permanent: true
-    #   loop: "{{ ansible_facts.tcp_listen  | map(attribute='port') | sort | list }}"
-    #   register: ports_added_to_firewalld
-
-    # - name: print Ports Added
-    #   debug:
-    #     var: ports_added_to_firewalld
-
     - name: Remove undesirable packages
       package:
         name: "{{ unnecessary_software }}"
         state: absent
-      ignore_errors: yes
-    
+      ignore_errors: true
+
     - name: Stop and disable unnecessary services
       service:
         name: "{{ item }}"
         state: stopped
-        enabled: no
+        enabled: false
       with_items: "{{ unnecessary_services }}"
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Enable ports on the list
       firewalld:
@@ -181,7 +137,7 @@
       service:
         name: sshd
         state: reloaded
-    
+
     - name: Restart firewalld
       service:
         name: firewalld
