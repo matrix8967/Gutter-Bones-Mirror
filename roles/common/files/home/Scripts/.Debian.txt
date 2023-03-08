@@ -51,7 +51,6 @@ imagemagick
 cargo
 rustc
 golang
-tty-clock
 cmus
 w3m
 apt-transport-https
