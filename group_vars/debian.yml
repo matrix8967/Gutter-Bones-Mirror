@@ -1,0 +1,107 @@
+---
+
+copy_pub_key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+timezone:
+  - America/Chicago
+
+allowed_ssh_networks:
+  - 192.168.122.0/24
+  - 10.10.10.0/24
+
+apt_packages:
+
+  - apt-transport-https
+  - asciinema
+  - bat
+  - bmon
+  - bridge-utils
+  - build-essential
+  - cargo
+  - chafa
+  - cifs-utils
+  - cmus
+  - curl
+  - ddgr
+  - dialog
+  - exfat-fuse
+  - fail2ban
+  - figlet
+  - flatpak
+  - fonts-powerline
+  - genisoimage
+  - git
+  - goaccess
+  - golang
+  - htop
+  - httpie
+  - ifstat
+  - iftop
+  - imagemagick
+  - inxi
+  - iotop
+  - ipcalc
+  - kitty
+  - libclang-dev
+  - libguestfs-tools
+  - libosinfo-bin
+  - libpcap-dev
+  - libvirt-clients
+  - libvirt-daemon-driver-lxc
+  - libvirt-daemon-driver-storage-zfs
+  - libvirt-daemon-system
+  - libvirt-daemon-system-systemd
+  - libvirt-doc
+  - lolcat
+  - lsb-release
+  - mc
+  - minicom
+  - most
+  - mpc
+  - mplayer
+  - ncdu
+  - ncmpcpp
+  - needrestart
+  - neofetch
+  - neovim
+  - net-tools
+  - nethogs
+  - nfs-common
+  - nmap
+  - nmon
+  - openvpn
+  - pkg-config
+  - powertop
+  - pwgen
+  - python3-pip
+  - python3-setuptools
+  - qemu-utils
+  - qrencode
+  - resolvconf
+  - ruby-full
+  - rustc
+  - s-tui
+  - screen
+  - speedtest-cli
+  - taskwarrior
+  - tcpdump
+  - tldr
+  - tmux
+  - tmux-plugin-manager
+  - tree
+  - ufw
+  - vagrant-libvirt
+  - vagrant-sshfs
+  - vim
+  - virtinst
+  - virtualenv
+  - vis
+  - w3m
+  - wavemon
+  - wget
+  - wireguard
+  - wireguard-tools
+  - wireshark
+  - zlib1g-dev
+  - zsh
+
