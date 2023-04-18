@@ -1,0 +1,5 @@
+---
+
+copy_pub_key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+timezone: America/Chicago

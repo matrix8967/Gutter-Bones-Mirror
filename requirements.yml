@@ -1,0 +1,14 @@
+---
+collections:
+  - name: community.network
+    source: https://galaxy.ansible.com
+  - name: community.general
+    source: https://galaxy.ansible.com
+  - name: community.routeros
+    source: https://galaxy.ansible.com
+  - name: vyos.vyos
+    source: https://galaxy.ansible.com
+  - name: community.libvirt
+    source: https://galaxy.ansible.com
+  - name: ansible.posix
+    source: https://galaxy.ansible.com
