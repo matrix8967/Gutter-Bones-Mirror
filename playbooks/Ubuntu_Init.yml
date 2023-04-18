@@ -2,7 +2,7 @@
 - hosts: [all]
   become: true
   vars_files:
-    - group_vars/Ubuntu_Default.yml
+    - group_vars/debian.yml
 
   vars_prompt:
     - name: "user_name"

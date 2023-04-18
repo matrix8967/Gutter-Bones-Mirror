@@ -57,6 +57,37 @@
         autoremove: yes
         purge: yes
 
+# User + Group Setup
+    - name: Verify 'sudo' group
+      group:
+        name: sudo
+        state: present
+
+    - name: Allow paswordless sudo to sudoers group.
+      lineinfile:
+        path: /etc/sudoers
+        state: present
+        regexp: '^%sudo'
+        line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+        validate: '/usr/sbin/visudo -cf %s'
+
+    - name: Create User.
+      user:
+        name: "{{ user_name }}"
+        state: present
+        groups: sudo
+        append: true
+        create_home: true
+        shell: /usr/bin/zsh
+
+    - name: Print message.
+      ansible.builtin.debug:
+        msg: 'Setting hostname to: {{ hostname }}'
+
+    - name: Set a hostname
+      hostname:
+        name: "{{ hostname }}"
+
     - name: Copy Dotfiles
       copy:
         dest: /home/{{ user_name }}/
@@ -81,4 +112,25 @@
         owner: root
         group: root
         mode: a+x
-    
+
+# SSH Key Exchange & Service Reload
+    - name: SSH Key Exchange.
+      authorized_key:
+        user: "{{ user_name }}"
+        state: present
+        key: "{{ copy_pub_key }}"
+
+    - name: Add hardened SSH config
+      copy:
+        dest: /etc/ssh/sshd_config
+        src: ../roles/common/files/etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: 0600
+      notify: Reload SSH
+
+  handlers:
+    - name: Reload SSH
+      service:
+        name: sshd
+        state: reloaded
