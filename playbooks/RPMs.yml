@@ -1,0 +1,23 @@
+---
+- name: Copy and install rpms
+  hosts: all
+  become: true
+
+  vars:
+    RPM:
+      - ../roles/rhel/files/rpms/bat.rpm
+
+  tasks:
+
+    - name: "Transfer Files"
+      copy:
+        src: "/home/azazel/Temp/Ansible/{{ item }}"
+        dest: /home/azazel/
+      loop: "{{ RPM }}"
+      register: copied
+
+    - name: "Install RPMs from local copied files"
+      ansible.builtin.yum:
+        name: "/home/azazel/{{ RPM }}"
+        state: present
+        name: "{{ copied | json_query('results[?!failed].dest[]') }}"
