@@ -5,8 +5,8 @@
   vars_files:
     - ../group_vars/rhel.yml
   tasks:
-    - name: Copy Dotfiles
-      copy:
+    - name: "Copy Dotfiles"
+      ansible.builtin.fetch.copy:
         dest: /home/{{ ansible_user }}/
         src: ../roles/common/files/home/
         owner: "{{ ansible_user }}"

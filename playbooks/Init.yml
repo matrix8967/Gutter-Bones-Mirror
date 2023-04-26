@@ -8,15 +8,15 @@
   vars_prompt:
     - name: "user_name"
       prompt: Desired username?
-      private: no
+      private: false
 
     - name: "hostname"
       prompt: Desired hostname?
-      private: no
+      private: false
 
     - name: "ssh_port"
       prompt: Desired SSH Port?
-      private: no
+      private: false
 
   tasks:
     # User + Group Setup
@@ -30,7 +30,7 @@
         path: /etc/sudoers
         state: present
         regexp: "^%sudo"
-        line: "%sudo ALL=(ALL) NOPASSWD: ALL"
+        line: "%sudo ALL=(ALL) falsePASSWD: ALL"
         validate: "/usr/sbin/visudo -cf %s"
 
     - name: Create User.
@@ -88,7 +88,7 @@
       apt:
         autoclean: yes
 
-    - name: Remove dependencies that are no longer needed
+    - name: Remove dependencies that are false longer needed
       apt:
         autoremove: yes
         purge: yes
@@ -143,7 +143,7 @@
         owner: root
         group: root
         mode: 0600
-      notify: Reload SSH
+      falsetify: Reload SSH
 
   handlers:
     - name: Reload SSH

@@ -4,20 +4,21 @@
   become: true
 
   vars:
-    RPM:
-      - ../roles/rhel/files/rpms/bat.rpm
+    rpm:
+      - bat.rpm
 
   tasks:
 
     - name: "Transfer Files"
-      copy:
-        src: "/home/azazel/Temp/Ansible/{{ item }}"
+      ansible.legacy.fetch.copy:
+        src: "/roles/rhel/files/rpms/{{ item }}"
         dest: /home/azazel/
-      loop: "{{ RPM }}"
+        mode: preserve
+      loop: "{{ rpm }}"
       register: copied
 
     - name: "Install RPMs from local copied files"
-      ansible.builtin.yum:
-        name: "/home/azazel/{{ RPM }}"
+      ansible.builtin.dnf:
+        name: "/home/azazel/{{ rpm }}"
         state: present
-        name: "{{ copied | json_query('results[?!failed].dest[]') }}"
+#        name: "{{ copied | json_query('results[?!failed].dest[]') }}"

@@ -3,49 +3,48 @@
   become: true
   hosts: all
   vars_files:
+    - ../group_vars/debian.yml
     - ../group_vars/rhel.yml
   tasks:
-    - name: Copy Dotfiles
-      copy:
-        dest: /home/{{ ansible_user }}/
-        src: ../roles/common/files/home/
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-      tags:
-        - dots
+#    - name: "Copy Dotfiles"
+#      ansible.builtin.fetchcopy:
+#        dest: /home/{{ ansible_user }}/
+#        src: ../roles/common/files/home/
+#        owner: "{{ ansible_user }}"
+#        group: "{{ ansible_user }}"
+#      tags:
+#        - dots
 
-    # Upgrade RHEL family OS packages
-    - name: Upgrade RHEL Family OS packages
-      yum:
+    - name: "Upgrade RHEL Family OS packages"
+      ansible.builtin.yum:
         name: "*"
         state: latest
       when: ansible_os_family == "RedHat"
       tags:
         - rpms
 
-    # Upgrade ARCH family OS packages
-    - name: Upgrade Arch Family OS packages
-      pacman:
-        update_cache: yes
-        upgrade: yes
+    - name: "Upgrade Arch Family OS packages"
+      community.general.pacman:
+        update_cache: true
+        upgrade: true
         state: latest
       when: ansible_os_family == "Archlinux"
       tags:
         - pacman
 
-    # Debian Family upgrade
-    - name: Update repositories cache
-      apt:
-        update_cache: yes
+    - name: "Update repositories cache"
+      ansible.builtin.apt:
+        update_cache: true
       when: ansible_os_family == "Debian"
       tags:
         - debs
-    - name: Update all packages to their latest version
-      apt:
+    - name: "Update Debian Family OS Packages"
+      ansible.builtin.apt:
         name: "*"
         state: latest
       when: ansible_os_family == "Debian"
-    - name: Upgrade the OS (apt-get dist-upgrade)
-      apt:
+
+    - name: "Upgrade the OS (apt-get dist-upgrade)"
+      ansible.builtin.apt:
         upgrade: dist
       when: ansible_os_family == "Debian"
