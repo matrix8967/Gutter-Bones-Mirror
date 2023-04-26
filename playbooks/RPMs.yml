@@ -10,10 +10,10 @@
   tasks:
 
     - name: "Transfer Files"
-      ansible.legacy.fetch.copy:
-        src: "/roles/rhel/files/rpms/{{ item }}"
-        dest: /home/azazel/
-        mode: preserve
+      ansible.builtin.fetch.copy:
+        src: "../roles/rhel/files/rpms/{{ item }}"
+        dest: /home/rexuser/
+#        mode: preserve
       loop: "{{ rpm }}"
       register: copied
 
@@ -21,4 +21,4 @@
       ansible.builtin.dnf:
         name: "/home/azazel/{{ rpm }}"
         state: present
-#        name: "{{ copied | json_query('results[?!failed].dest[]') }}"
+        name: "{{ copied | json_query('results[?!failed].dest[]') }}"

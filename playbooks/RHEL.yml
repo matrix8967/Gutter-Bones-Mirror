@@ -16,7 +16,6 @@
       private: false
 
   tasks:
-    # User + Group Setup
     - name: Verify 'sudo' group
       ansible.builtin.group:
         name: sudo
@@ -30,6 +29,8 @@
         append: true
         create_home: true
         shell: /usr/bin/zsh
+      tags:
+        - user
 
     - name: "Print message"
       ansible.builtin.debug:
@@ -38,15 +39,17 @@
     - name: "Set a hostname"
       ansible.builtin.hostname:
         name: "{{ hostname }}"
+      tags:
+        - hostname
 
     - name: "Upgrade RHEL Family OS packages"
-      ansible.builtin.yum:
+      ansible.legacy.dnf:
         name: "*"
         state: latest
       when: ansible_os_family == "RedHat"
 
     - name: "Install RHEL Packages"
-      ansible.builtin.yum:
+      ansible.legacy.dnf:
         name: "{{ dnf_packages }}"
         state: "latest"
 
@@ -71,6 +74,8 @@
         src: ../roles/common/files/home/
         owner: "{{ username }}"
         group: "{{ username }}"
+      tags:
+        - dots
 
     - name: "Delete MOTD"
       ansible.builtin.file:
@@ -93,7 +98,7 @@
         mode: a+x
 
     - name: "Remove undesirable packages"
-      ansible.builtin.yum.package:
+      ansible.legacy.dnf:
         name: "{{ unnecessary_software }}"
         state: absent
       ignore_errors: true
@@ -116,7 +121,6 @@
       notify:
         - Restart firewalld
 
-    # SSH Key Exchange & Service Reload
     - name: "SSH Key Exchange"
       ansible.posix.authorized_key:
         user: "{{ username }}"
