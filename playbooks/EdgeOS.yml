@@ -1,16 +1,16 @@
 ---
-
 - name: EdgeOS Playbook
   connection: ansible.netcommon.network_cli
   gather_facts: false
   hosts: all
   tasks:
 
-    - vyos.vyos.vyos_facts:
+    - name: "Gather Facts"
+      vyos.vyos.vyos_facts:
         gather_subset: min
         gather_network_resources: interfaces
 
-    - name: show ethX interfaces
+    - name: "Show ethX interfaces"
       vyos.vyos.vyos_command:
         commands:
         - show interfaces ethernet {{ item }}
@@ -25,7 +25,7 @@
       - switch0
       - lo
 
-    - name: Print return information from the previous task
+    - name: "Print Information"
       ansible.builtin.debug:
         var: result
         verbosity: 2
