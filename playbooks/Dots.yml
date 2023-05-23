@@ -3,7 +3,7 @@
   become: true
   hosts: all
   vars_files:
-    - ../group_vars/rhel.yml
+    - ../group_vars/dots.yml
   tasks:
     - name: "Copy Dotfiles"
       ansible.builtin.fetch.copy:

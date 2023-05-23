@@ -27,16 +27,18 @@ Plugin 'ntpeters/vim-better-whitespace'
 Plugin 'gyim/vim-boxdraw'
 Plugin 'isobit/vim-caddyfile'
 Plugin 'mhartington/oceanic-next'
-Plugin 'blindFS/vim-taskwarrior'
+" Plugin 'blindFS/vim-taskwarrior'
 Plugin 'hzchirs/vim-material'
-Plugin 'fladson/vim-kitty'
 Plugin 'Xuyuanp/nerdtree-git-plugin'
 Plugin 'PhilRunninger/nerdtree-visual-selection'
+Plugin 'folke/tokyonight.nvim', { 'branch': 'main' }
+Plugin 'ghifarit53/tokyonight-vim'
 
 let g:strip_whitespace_on_save = 1
 let g:strip_whitespace_confirm = 0
 let g:vim_markdown_folding_disabled = 1
 let g:NERDTreeGitStatusUseNerdFonts = 1
+
 
 " All of your Plugins must be added before the following line
 call vundle#end()            " required
@@ -65,6 +67,14 @@ let &t_ut=''
 
 syntax enable
 
+" Tokyo Night:
+
+let g:tokyonight_style = 'night' " available: night, storm
+let g:tokyonight_enable_italic = 1
+let g:tokyonight_transparent_background = 1
+
+colorscheme tokyonight
+
 " Material:
 
 " Oceanic:
@@ -79,28 +89,29 @@ syntax enable
 "colorscheme vim-material
 
 " Oceanic
-let g:material_style='oceanic'
-set background=dark
-colorscheme vim-material
+" let g:material_style='oceanic'
+" set background=dark
+" colorscheme vim-material
 
 " Light
 "set background=light
 "colorscheme vim-material
 
-" Dracula
+" Dracula:
 
 " syntax enable
 " let g:dracula_colorterm = 0
 " colorscheme dracula
 
-" DraculaPro
+" DraculaPro:
 
 " packadd! dracula_pro
 " syntax enable
 " let g:dracula_colorterm = 0
 " colorscheme dracula_pro
 
-" Powerline Colors
+" Powerline Colors:
 
 " let g:airline_theme='deus'
-let g:airline_theme='material'
+" let g:airline_theme='material'
+let g:airline_theme = "tokyonight"

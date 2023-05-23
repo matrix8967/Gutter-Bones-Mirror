@@ -68,14 +68,14 @@
         test_command: whoami
       when: reboot_required.stat.exists
 
-    - name: "Copy Dotfiles"
-      ansible.builtin.fetch.copy:
-        dest: /home/{{ username }}/
-        src: ../roles/common/files/home/
-        owner: "{{ username }}"
-        group: "{{ username }}"
-      tags:
-        - dots
+    # - name: "Copy Dotfiles"
+    #   ansible.builtin.fetch.copy:
+    #     dest: /home/{{ username }}/
+    #     src: ../roles/common/files/home/
+    #     owner: "{{ username }}"
+    #     group: "{{ username }}"
+    #   tags:
+    #     - dots
 
     - name: "Delete MOTD"
       ansible.builtin.file:

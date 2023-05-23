@@ -6,6 +6,7 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
 fi
 
 export TERM="xterm-256color"
+
 POWERLEVEL9K_MODE='nerdfont-complete'
 
 # =====SSH-Agent===== #
@@ -17,7 +18,7 @@ export ZSH="/home/$USER/.oh-my-zsh"
 
 ZSH_THEME=powerlevel10k/powerlevel10k
 
-plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap macos pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp rust bundler autoupdate ansible adb)
+plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap macos pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp rust bundler aws autoupdate ansible adb)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -52,7 +53,7 @@ export EDITOR="/usr/bin/vim"
 autoload -Uz compinit
 compinit
 # Completion for kitty
-kitty + complete setup zsh | source /dev/stdin
+# kitty + complete setup zsh | source /dev/stdin
 # zinit light redxtech/zsh-kitty
 
 # =====Bat/Man===== #
@@ -72,9 +73,9 @@ autoload bashcompinit
 bashcompinit
 eval "$(register-python-argcomplete pmbootstrap)"
 
-# =====Ansible===== #
+# =====1PasswordCLI===== #
 
-export ANSIBLE_NOCOWS=1
+eval "$(op completion zsh)"; compdef _op op
 
 # =====Zsh Opts===== #
 
@@ -119,8 +120,20 @@ alias lsssh='ps aux | egrep "sshd: [a-zA-Z]+@"'
 
 # =====Functions===== #
 
-function pvpn {
-	sudo protonvpn c -f
+function pvpn-connect {
+	protonvpn-cli connect --fastest
+}
+
+function pvpn-status {
+	protonvpn-cli status
+}
+
+function pvpn-view {
+	nmcli connection show --active
+}
+
+function pvpn-reset-ks {
+	nmcli connection delete pvpn-ipv6leak-protection && nmcli connection delete pvpn-killswitch
 }
 
 function amimullvad {
@@ -174,8 +187,7 @@ function Quotes {
 	a=7; echo $a; echo "$a"; echo '$a'; echo "'$a'"; echo '"$a"'
 }
 
-function cpu_temp()
-{
+function cpu_temp() {
 	# Init result
 	local result=0.00
 	# The first line of this file is x1000.
@@ -203,6 +215,12 @@ function Github_Pull {
 	done
 }
 
+function Dir_Pull {
+	for dir in $(pwd)/*/; do
+		git -C $dir pull
+	done
+}
+
 function strip_IPs {
 	sed -E -r 's/(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/$IP_ADDRESSES/g' $1
 }
@@ -212,7 +230,7 @@ function spotifydl {
 }
 
 function vid_dl {
-	ffmpeg -user_agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/601.7.8(KHTML, like Gecko) Version/9.1.3 Safari/537.86.7" -i $1 -c:v copy -c:a copy -f mpegts "$2"
+	ffmpeg -user_agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/601.7.8(KHTML, like Gecko) Version/9.1.3 Safari/537.86.7" -i "$1" -c:v copy -c:a copy -f mpegts "$2"
 }
 
 function ADB_Text {
@@ -222,6 +240,7 @@ function ADB_Text {
 	text=${text//\"/\\\"}
 	adb shell input text "$text"
 	adb shell input keyevent 66
+
 }
 
 function rpi_bl_off {
@@ -229,7 +248,7 @@ function rpi_bl_off {
 }
 
 function rpi_bl_on {
-        sudo chown -R $USER:$USER /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power && echo 0 > /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power
+	sudo chown -R $USER:$USER /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power && echo 0 > /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power
 }
 
 # =====Blur for Kitty Term===== #
@@ -241,3 +260,35 @@ function rpi_bl_on {
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+zstyle ':completion:*' menu select
+fpath+=~/.zfunc
+
+# JINA_CLI_BEGIN
+
+## autocomplete
+if [[ ! -o interactive ]]; then
+	return
+fi
+
+compctl -K _jina jina
+
+_jina() {
+	local words completions
+	read -cA words
+
+	if [ "${#words}" -eq 2 ]; then
+		completions="$(jina commands)"
+	else
+		completions="$(jina completions ${words[2,-2]})"
+	fi
+
+	reply=(${(ps:
+		:)completions})
+	}
+
+# session-wise fix
+ulimit -n 4096
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+
+# JINA_CLI_END
