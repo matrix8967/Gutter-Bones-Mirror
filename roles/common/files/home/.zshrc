@@ -75,7 +75,11 @@ eval "$(register-python-argcomplete pmbootstrap)"
 
 # =====1PasswordCLI===== #
 
-eval "$(op completion zsh)"; compdef _op op
+# eval "$(op completion zsh)"; compdef _op op
+
+# =====Ansible===== #
+
+export ANSIBLE_NOCOWS=1
 
 # =====Zsh Opts===== #
 
@@ -92,6 +96,8 @@ setopt hist_expire_dups_first # delete duplicates first when HISTFILE size excee
 setopt hist_ignore_dups       # ignore duplicated commands history list
 setopt hist_ignore_space      # ignore commands that start with space
 setopt hist_verify            # show command with history expansion to user before running it
+
+export HISTORY_IGNORE="(ls|cd|pwd|exit|sudo reboot|history|cd -|cd ..)"
 
 #ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=999'
 
@@ -117,6 +123,15 @@ alias wifi_scan='nmcli device wifi list'
 alias cat='bat -pp'
 alias db9='screen -dmLS USG-screen /dev/ttyUSB0 115200,cs8'
 alias lsssh='ps aux | egrep "sshd: [a-zA-Z]+@"'
+alias xpaste='xclip -out -sel clipboard'
+alias xcopy='xclip -in -sel clipboard'
+alias grep='grep --color=auto'
+alias egrep='egrep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias psa="ps auxf"
+alias psgrep="ps aux | grep -v grep | grep -i -e VSZ -e"
+alias psmem='ps auxf | sort -nr -k 4'
+alias pscpu='ps auxf | sort -nr -k 3'
 
 # =====Functions===== #
 
@@ -251,6 +266,11 @@ function rpi_bl_on {
 	sudo chown -R $USER:$USER /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power && echo 0 > /sys/devices/platform/rpi_backlight/backlight/rpi_backlight/bl_power
 }
 
+function git_log {
+	git log --graph --abbrev-commit --no-decorate --date=format:'%Y-%m-%d %H:%M:%S'\'' --format=format:'\''%C(8)%>|(16)%h %C(7)%ad %C(8)%&lt;(16,trunc)%an %C(auto)%d%>|(1)%s'\'' --all'
+
+}
+
 # =====Blur for Kitty Term===== #
 
 # if [[ $(ps --no-header -p $PPID -o comm) =~ '^yakuake|kitty$' ]]; then
@@ -260,35 +280,3 @@ function rpi_bl_on {
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-
-zstyle ':completion:*' menu select
-fpath+=~/.zfunc
-
-# JINA_CLI_BEGIN
-
-## autocomplete
-if [[ ! -o interactive ]]; then
-	return
-fi
-
-compctl -K _jina jina
-
-_jina() {
-	local words completions
-	read -cA words
-
-	if [ "${#words}" -eq 2 ]; then
-		completions="$(jina commands)"
-	else
-		completions="$(jina completions ${words[2,-2]})"
-	fi
-
-	reply=(${(ps:
-		:)completions})
-	}
-
-# session-wise fix
-ulimit -n 4096
-export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
-
-# JINA_CLI_END
