@@ -5,9 +5,9 @@ copy_pub_key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
 timezone:
   - America/Chicago
 
-allowed_ssh_networks:
-  - 192.168.122.0/24
-  - 10.10.10.0/24
+#allowed_ssh_networks:
+#  - 192.168.122.0/24
+#  - 10.10.10.0/24
 
 apt_packages:
 

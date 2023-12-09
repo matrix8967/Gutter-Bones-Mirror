@@ -1,42 +1,38 @@
 set nocompatible              " be iMproved, required
-" filetype off                  " required
+filetype off                  " required
 set encoding=utf8
 set t_RV=
 
 " set the runtime path to include Vundle and initialize
-" set rtp+=~/.vim/bundle/Vundle.vim
-" call vundle#begin()
-call plug#begin()
-Plug 'VundleVim/Vundle.vim'
-Plug 'tpope/vim-fugitive'
-Plug 'git://git.wincent.com/command-t.git'
-Plug 'rstacruz/sparkup', {'rtp': 'vim/'}
-Plug 'vim-airline/vim-airline'
-Plug 'vim-airline/vim-airline-themes'
-Plug 'dracula/vim', { 'name': 'dracula' }
-" Plug 'calviken/vim-gdscript3'
-Plug 'preservim/nerdtree'
-Plug 'ryanoasis/vim-devicons'
-Plug 'rust-lang/rust.vim'
-Plug 'chr4/nginx.vim'
-Plug 'fatih/vim-go'
-Plug 'godlygeek/tabular'
-Plug 'plasticboy/vim-markdown'
-Plug 'hashivim/vim-terraform'
-Plug 'cespare/vim-toml'
-Plug 'ntpeters/vim-better-whitespace'
-Plug 'gyim/vim-boxdraw'
-Plug 'isobit/vim-caddyfile'
-Plug 'mhartington/oceanic-next'
-" Plug 'blindFS/vim-taskwarrior'
-Plug 'hzchirs/vim-material'
-Plug 'Xuyuanp/nerdtree-git-plugin'
-Plug 'PhilRunninger/nerdtree-visual-selection'
-Plug 'folke/tokyonight.nvim', { 'branch': 'main' }
-Plug 'ghifarit53/tokyonight-vim'
-Plug 'junegunn/vim-plug'
-Plug 'fladson/vim-kitty'
-call plug#end()
+set rtp+=~/.vim/bundle/Vundle.vim
+call vundle#begin()
+Plugin 'VundleVim/Vundle.vim'
+Plugin 'tpope/vim-fugitive'
+Plugin 'git://git.wincent.com/command-t.git'
+Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
+Plugin 'vim-airline/vim-airline'
+Plugin 'vim-airline/vim-airline-themes'
+Plugin 'dracula/vim', { 'name': 'dracula' }
+" Plugin 'calviken/vim-gdscript3'
+Plugin 'preservim/nerdtree'
+Plugin 'ryanoasis/vim-devicons'
+Plugin 'rust-lang/rust.vim'
+Plugin 'chr4/nginx.vim'
+Plugin 'fatih/vim-go'
+Plugin 'godlygeek/tabular'
+Plugin 'plasticboy/vim-markdown'
+Plugin 'hashivim/vim-terraform'
+Plugin 'cespare/vim-toml'
+Plugin 'ntpeters/vim-better-whitespace'
+Plugin 'gyim/vim-boxdraw'
+Plugin 'isobit/vim-caddyfile'
+Plugin 'mhartington/oceanic-next'
+" Plugin 'blindFS/vim-taskwarrior'
+Plugin 'hzchirs/vim-material'
+Plugin 'Xuyuanp/nerdtree-git-plugin'
+Plugin 'PhilRunninger/nerdtree-visual-selection'
+Plugin 'folke/tokyonight.nvim', { 'branch': 'main' }
+Plugin 'ghifarit53/tokyonight-vim'
 
 let g:strip_whitespace_on_save = 1
 let g:strip_whitespace_confirm = 0
@@ -45,8 +41,8 @@ let g:NERDTreeGitStatusUseNerdFonts = 1
 
 
 " All of your Plugins must be added before the following line
-" call vundle#end()            " required
-" filetype plugin indent on    " required
+call vundle#end()            " required
+filetype plugin indent on    " required
 
 " NerdTree
 
