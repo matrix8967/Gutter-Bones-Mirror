@@ -130,7 +130,8 @@
         direction: incoming
 
 # SSH Key Exchange & Service Reload
-    - name: SSH Key Exchange.
+
+    - name: SSH Key Exchange
       authorized_key:
         user: "{{ user_name }}"
         state: present
@@ -143,7 +144,7 @@
         owner: root
         group: root
         mode: 0600
-      falsetify: Reload SSH
+      notify: Reload SSH
 
   handlers:
     - name: Reload SSH
