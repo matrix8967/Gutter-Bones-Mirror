@@ -1,48 +1,65 @@
 set nocompatible              " be iMproved, required
-filetype off                  " required
+" filetype off                  " required
 set encoding=utf8
 set t_RV=
 
-" set the runtime path to include Vundle and initialize
-set rtp+=~/.vim/bundle/Vundle.vim
-call vundle#begin()
-Plugin 'VundleVim/Vundle.vim'
-Plugin 'tpope/vim-fugitive'
-Plugin 'git://git.wincent.com/command-t.git'
-Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
-Plugin 'vim-airline/vim-airline'
-Plugin 'vim-airline/vim-airline-themes'
-Plugin 'dracula/vim', { 'name': 'dracula' }
-" Plugin 'calviken/vim-gdscript3'
-Plugin 'preservim/nerdtree'
-Plugin 'ryanoasis/vim-devicons'
-Plugin 'rust-lang/rust.vim'
-Plugin 'chr4/nginx.vim'
-Plugin 'fatih/vim-go'
-Plugin 'godlygeek/tabular'
-Plugin 'plasticboy/vim-markdown'
-Plugin 'hashivim/vim-terraform'
-Plugin 'cespare/vim-toml'
-Plugin 'ntpeters/vim-better-whitespace'
-Plugin 'gyim/vim-boxdraw'
-Plugin 'isobit/vim-caddyfile'
-Plugin 'mhartington/oceanic-next'
-" Plugin 'blindFS/vim-taskwarrior'
-Plugin 'hzchirs/vim-material'
-Plugin 'Xuyuanp/nerdtree-git-plugin'
-Plugin 'PhilRunninger/nerdtree-visual-selection'
-Plugin 'folke/tokyonight.nvim', { 'branch': 'main' }
-Plugin 'ghifarit53/tokyonight-vim'
+" Install vim-plug if not found
+if empty(glob('~/.vim/autoload/plug.vim'))
+	silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
+				\ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+endif
 
+" Run PlugInstall if there are missing plugins
+autocmd VimEnter * if len(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
+			\| PlugInstall --sync | source $MYVIMRC
+			\| endif
+
+" set the runtime path to include Vundle and initialize
+" set rtp+=~/.vim/bundle/Vundle.vim
+" call vundle#begin()
+call plug#begin()
+" Plug 'VundleVim/Vundle.vim'
+Plug 'tpope/vim-fugitive'
+" Plug 'git://git.wincent.com/command-t.git'
+Plug 'rstacruz/sparkup', {'rtp': 'vim/'}
+Plug 'vim-airline/vim-airline'
+Plug 'vim-airline/vim-airline-themes'
+Plug 'dracula/vim', { 'name': 'dracula' }
+" Plug 'calviken/vim-gdscript3'
+Plug 'preservim/nerdtree'
+Plug 'ryanoasis/vim-devicons'
+Plug 'rust-lang/rust.vim'
+Plug 'chr4/nginx.vim'
+Plug 'fatih/vim-go'
+Plug 'godlygeek/tabular'
+Plug 'plasticboy/vim-markdown'
+Plug 'hashivim/vim-terraform'
+Plug 'cespare/vim-toml'
+Plug 'ntpeters/vim-better-whitespace'
+Plug 'gyim/vim-boxdraw'
+Plug 'isobit/vim-caddyfile'
+Plug 'mhartington/oceanic-next'
+" Plug 'blindFS/vim-taskwarrior'
+Plug 'hzchirs/vim-material'
+Plug 'Xuyuanp/nerdtree-git-plugin'
+Plug 'PhilRunninger/nerdtree-visual-selection'
+Plug 'folke/tokyonight.nvim', { 'branch': 'main' }
+Plug 'ghifarit53/tokyonight-vim'
+Plug 'junegunn/vim-plug'
+Plug 'fladson/vim-kitty'
+Plug 'NoahTheDuke/vim-just'
+Plug 'mfussenegger/nvim-lint'
+call plug#end()
+
+let g:CommandTPreferredImplementation='lua'
 let g:strip_whitespace_on_save = 1
 let g:strip_whitespace_confirm = 0
 let g:vim_markdown_folding_disabled = 1
 let g:NERDTreeGitStatusUseNerdFonts = 1
 
-
 " All of your Plugins must be added before the following line
-call vundle#end()            " required
-filetype plugin indent on    " required
+" call vundle#end()            " required
+" filetype plugin indent on    " required
 
 " NerdTree
 
@@ -62,6 +79,13 @@ source ~/.vim_runtime/my_configs.vim
 catch
 endtry
 
+" Persistent Undo
+
+set undofile                " Save undos after file closes
+set undodir=$HOME/.vim/undo " where to save undo histories
+set undolevels=1000         " How many undos
+set undoreload=10000        " number of lines to save for undo
+
 " Kitty Terminal Stuff
 let &t_ut=''
 
@@ -75,18 +99,18 @@ let g:tokyonight_transparent_background = 1
 
 colorscheme tokyonight
 
-" Material:
+" Material
 
-" Oceanic:
+" Oceanic
 
 " Dark
-"set background=dark
-"colorscheme vim-material
+" set background=dark
+" colorscheme vim-material
 
 " Palenight
-"let g:material_style='palenight'
-"set background=dark
-"colorscheme vim-material
+" let g:material_style='palenight'
+" set background=dark
+" colorscheme vim-material
 
 " Oceanic
 " let g:material_style='oceanic'
@@ -94,23 +118,23 @@ colorscheme tokyonight
 " colorscheme vim-material
 
 " Light
-"set background=light
-"colorscheme vim-material
+" set background=light
+" colorscheme vim-material
 
-" Dracula:
+" Dracula
 
 " syntax enable
 " let g:dracula_colorterm = 0
 " colorscheme dracula
 
-" DraculaPro:
+" DraculaPro
 
 " packadd! dracula_pro
 " syntax enable
 " let g:dracula_colorterm = 0
 " colorscheme dracula_pro
 
-" Powerline Colors:
+" Powerline Colors
 
 " let g:airline_theme='deus'
 " let g:airline_theme='material'

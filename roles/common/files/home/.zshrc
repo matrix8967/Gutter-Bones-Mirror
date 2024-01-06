@@ -34,6 +34,7 @@ export PATH=$PATH:/usr/local/go/bin
 # =====Python===== #
 
 export PATH=$PATH:~/.local/bin/
+eval "$(register-python-argcomplete pipx)"
 
 # =====Ruby===== #
 
@@ -75,7 +76,7 @@ eval "$(register-python-argcomplete pmbootstrap)"
 
 # =====1PasswordCLI===== #
 
-# eval "$(op completion zsh)"; compdef _op op
+eval "$(op completion zsh)"; compdef _op op
 
 # =====Ansible===== #
 
@@ -267,8 +268,20 @@ function rpi_bl_on {
 }
 
 function git_log {
-	git log --graph --abbrev-commit --no-decorate --date=format:'%Y-%m-%d %H:%M:%S'\'' --format=format:'\''%C(8)%>|(16)%h %C(7)%ad %C(8)%&lt;(16,trunc)%an %C(auto)%d%>|(1)%s'\'' --all'
+	git log --graph --abbrev-commit --no-decorate --date=format:'%Y-%m-%d %H:%M:%S'\'' --format=format:'\''%C(8)%>|(16)%h %C(7)%ad %C(8)%&lt;(16,trunc)%an %C(auto)%d %>|(1)%s'\'' --all'
 
+}
+
+function CLI_LS {
+	compgen -ac | sort --ignore-case
+}
+
+function ctrld_update {
+	sh -c 'sh -c "$(curl -sL https://api.controld.com/dl)"'
+}
+
+function ssh_pcap {
+	ssh $1 tcpdump -w - -U 'not port 22' | wireshark -i - -k
 }
 
 # =====Blur for Kitty Term===== #
@@ -280,3 +293,39 @@ function git_log {
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+zstyle ':completion:*' menu select
+fpath+=~/.zfunc
+
+
+# JINA_CLI_BEGIN
+
+## autocomplete
+if [[ ! -o interactive ]]; then
+	return
+fi
+
+compctl -K _jina jina
+
+_jina() {
+	local words completions
+	read -cA words
+
+	if [ "${#words}" -eq 2 ]; then
+		completions="$(jina commands)"
+	else
+		completions="$(jina completions ${words[2,-2]})"
+	fi
+
+	reply=(${(ps:
+		:)completions})
+	}
+
+# session-wise fix
+ulimit -n 4096
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+
+# JINA_CLI_END
+
+
+
