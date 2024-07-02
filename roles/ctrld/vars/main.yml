@@ -1,0 +1,5 @@
+---
+  resolver_id: "your_resolver_id_here"
+  primary_upstream: "https://freedns.controld.com/p2"
+  secondary_upstream: "https://freedns.controld.com/p1"
+  provisioning_code: "your_provisioning_code_here"

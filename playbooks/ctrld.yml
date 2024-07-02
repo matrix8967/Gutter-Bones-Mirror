@@ -1,0 +1,15 @@
+---
+  - name: Deploy ctrld on Linux hosts
+    hosts: all
+    become: yes
+    tasks:
+      - name: Download and install ctrld
+        shell: >
+          sh -c 'sh -c "$(curl -sSL https://api.controld.com/dl)"'
+        args:
+          creates: /usr/local/bin/ctrld
+
+      - name: Start ctrld service
+        shell: ctrld start --cd RESOLVER_ID_GOES_HERE
+        args:
+          creates: /etc/controld/ctrld.toml

@@ -1,0 +1,18 @@
+---
+    - name: Download and install ctrld
+      shell: >
+        sh -c 'sh -c "$(curl -sSL https://api.controld.com/dl)" -s {{ provisioning_code }}'
+      args:
+        executable: /bin/bash
+
+    - name: Start ctrld service
+      shell: >
+        ctrld start
+      args:
+        executable: /bin/bash
+
+    - name: Enable and start systemd service
+      service:
+        name: ctrld
+        enabled: yes
+        state: started
