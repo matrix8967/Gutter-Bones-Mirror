@@ -1,0 +1,36 @@
+---
+- name: Test Asus Router Connectivity and Command Execution
+  hosts: asus_merlin
+  gather_facts: no
+  tasks:
+    - name: Check router uptime
+      raw: nvram get uptime
+      register: uptime_output
+
+    - name: Print router uptime
+      debug:
+        msg: "Router uptime: {{ uptime_output.stdout }}"
+
+    - name: Check firmware version
+      raw: nvram get buildno
+      register: firmware_version
+
+    - name: Print firmware version
+      debug:
+        msg: "Router firmware version: {{ firmware_version.stdout }}"
+
+    - name: Check wireless SSID
+      raw: nvram get wl_ssid
+      register: wireless_ssid
+
+    - name: Print wireless SSID
+      debug:
+        msg: "Wireless SSID: {{ wireless_ssid.stdout }}"
+
+    - name: Check router model
+      raw: nvram get productid
+      register: router_model
+
+    - name: Print router model
+      debug:
+        msg: "Router model: {{ router_model.stdout }}"
