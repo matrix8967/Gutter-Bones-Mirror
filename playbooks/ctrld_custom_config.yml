@@ -10,12 +10,12 @@
           creates: /usr/local/bin/ctrld
       - name: Upload custom ctrld configuration
         copy:
-          src: ctrld.toml
+          src: roles/ctrld/files/ctrld.toml
           dest: /etc/controld/ctrld.toml
           owner: root
           group: root
           mode: '0644'
       - name: Start ctrld service
-        shell: ctrld start
+        shell: ctrld start --cd=
         args:
           creates: /etc/systemd/system/ctrld.service

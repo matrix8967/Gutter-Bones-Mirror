@@ -1,15 +1,52 @@
 ---
-  - name: Deploy ctrld on Linux hosts
-    hosts: all
-    become: yes
-    tasks:
-      - name: Download and install ctrld
-        shell: >
-          sh -c 'sh -c "$(curl -sSL https://api.controld.com/dl)"'
-        args:
-          creates: /usr/local/bin/ctrld
+- name: Install and Configure Control D's ctrld
+  hosts: all
+  become: yes
 
-      - name: Start ctrld service
-        shell: ctrld start --cd RESOLVER_ID_GOES_HERE
-        args:
-          creates: /etc/controld/ctrld.toml
+  tasks:
+    - name: Update and upgrade apt packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Download and install ctrld
+      shell: |
+        curl -sL https://api.controld.com/dl | sh
+
+    - name: Create ctrld configuration directory
+      file:
+        path: /etc/controld
+        state: directory
+        mode: '0755'
+
+    - name: Write the ctrld configuration file
+      copy:
+        dest: /etc/controld/ctrld.toml
+        content: |
+          [listener]
+            [listener.0]
+              ip = "0.0.0.0"
+              port = 53
+          
+          [upstream]
+            [upstream.0]
+              type = "doh"
+              endpoint = "https://freedns.controld.com/p2"
+              timeout = 5000
+        mode: '0644'
+
+    - name: Download and set up `ctrld.service` in systemd
+      get_url:
+        url: https://raw.githubusercontent.com/Control-D-Inc/ctrld/main/etc/systemd/system/ctrld.service
+        dest: /etc/systemd/system/ctrld.service
+        mode: '0644'
+
+    - name: Reload systemd to recognize ctrld service
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start ctrld service
+      systemd:
+        name: ctrld
+        enabled: yes
+        state: started

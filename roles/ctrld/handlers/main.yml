@@ -1,5 +1,5 @@
 ---
-    - name: restart ctrld
-      service:
-        name: ctrld
-        state: restarted
+  - name: restart ctrld
+    service:
+      name: ctrld
+      state: restarted
