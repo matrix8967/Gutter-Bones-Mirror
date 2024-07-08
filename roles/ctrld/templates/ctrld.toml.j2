@@ -1,0 +1,15 @@
+[listener]
+  [listener.0]
+    ip = "0.0.0.0"
+    port = 53
+
+[upstream]
+  [upstream.0]
+    type = "doh"
+    endpoint = "{{ primary_upstream }}"
+    timeout = 5000
+
+  [upstream.1]
+    type = "doh"
+    endpoint = "{{ secondary_upstream }}"
+    timeout = 5000

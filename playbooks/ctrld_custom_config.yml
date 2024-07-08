@@ -1,0 +1,21 @@
+---
+  - name: Deploy ctrld on Linux hosts
+    hosts: all
+    become: yes
+    tasks:
+      - name: Download and install ctrld
+        shell: >
+          sh -c 'sh -c "$(curl -sSL https://api.controld.com/dl)"'
+        args:
+          creates: /usr/local/bin/ctrld
+      - name: Upload custom ctrld configuration
+        copy:
+          src: roles/ctrld/files/ctrld.toml
+          dest: /etc/controld/ctrld.toml
+          owner: root
+          group: root
+          mode: '0644'
+      - name: Start ctrld service
+        shell: ctrld start --cd=
+        args:
+          creates: /etc/systemd/system/ctrld.service

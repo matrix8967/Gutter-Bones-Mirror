@@ -1,0 +1,38 @@
+---
+- name: Install and configure ctrld
+  hosts: all
+  become: true
+  vars_files:
+      - ../group_vars/ctrld.yml
+  tasks:
+    - name: Ensure curl is installed
+      package:
+        name: curl
+        state: present
+
+    - name: Download the ctrld installer script
+      get_url:
+        url: https://api.controld.com/dl
+        dest: /usr/local/bin/ctrld_installer.sh
+        mode: '0755'
+
+    - name: Run the ctrld installer script
+      shell: |
+        set -x
+        /usr/local/bin/ctrld_installer.sh {{ resolver_id }} forced
+      register: install_output
+      ignore_errors: yes
+
+    - name: Debug ctrld installer script output
+      debug:
+        var: install_output
+
+    - name: Check if ctrld is installed
+      command: /usr/local/bin/ctrld --version
+      register: result
+      ignore_errors: yes
+
+    - name: Fail if ctrld is not found
+      fail:
+        msg: "ctrld is not installed correctly."
+      when: result.rc != 0
