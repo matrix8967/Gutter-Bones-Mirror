@@ -1,52 +1,38 @@
 ---
-- name: Install and Configure Control D's ctrld
+- name: Install and configure ctrld
   hosts: all
-  become: yes
-
+  become: true
+  vars_files:
+      - ../group_vars/ctrld.yml
   tasks:
-    - name: Update and upgrade apt packages
-      apt:
-        update_cache: yes
-        upgrade: dist
+    - name: Ensure curl is installed
+      package:
+        name: curl
+        state: present
 
-    - name: Download and install ctrld
-      shell: |
-        curl -sL https://api.controld.com/dl | sh
-
-    - name: Create ctrld configuration directory
-      file:
-        path: /etc/controld
-        state: directory
+    - name: Download the ctrld installer script
+      get_url:
+        url: https://api.controld.com/dl
+        dest: /usr/local/bin/ctrld_installer.sh
         mode: '0755'
 
-    - name: Write the ctrld configuration file
-      copy:
-        dest: /etc/controld/ctrld.toml
-        content: |
-          [listener]
-            [listener.0]
-              ip = "0.0.0.0"
-              port = 53
-          
-          [upstream]
-            [upstream.0]
-              type = "doh"
-              endpoint = "https://freedns.controld.com/p2"
-              timeout = 5000
-        mode: '0644'
+    - name: Run the ctrld installer script
+      shell: |
+        set -x
+        /usr/local/bin/ctrld_installer.sh -s {{ resolver_id }} forced
+      register: install_output
+      ignore_errors: yes
 
-    - name: Download and set up `ctrld.service` in systemd
-      get_url:
-        url: https://raw.githubusercontent.com/Control-D-Inc/ctrld/main/etc/systemd/system/ctrld.service
-        dest: /etc/systemd/system/ctrld.service
-        mode: '0644'
+    - name: Debug ctrld installer script output
+      debug:
+        var: install_output
 
-    - name: Reload systemd to recognize ctrld service
-      systemd:
-        daemon_reload: yes
+    - name: Check if ctrld is installed
+      command: /usr/local/bin/ctrld version
+      register: result
+      ignore_errors: yes
 
-    - name: Enable and start ctrld service
-      systemd:
-        name: ctrld
-        enabled: yes
-        state: started
+    - name: Fail if ctrld is not found
+      fail:
+        msg: "ctrld is not installed correctly."
+      when: result.rc != 0
