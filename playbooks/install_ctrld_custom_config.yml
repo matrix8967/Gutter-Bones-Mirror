@@ -16,6 +16,6 @@
           group: root
           mode: '0644'
       - name: Start ctrld service
-        shell: ctrld start --cd=
+        shell: ctrld start --cd={{ resolver_id }}
         args:
           creates: /etc/systemd/system/ctrld.service
