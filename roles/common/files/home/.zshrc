@@ -18,7 +18,7 @@ export ZSH="/home/$USER/.oh-my-zsh"
 
 ZSH_THEME=powerlevel10k/powerlevel10k
 
-plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s minikube nmap macos pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp rust bundler aws autoupdate ansible adb)
+plugins=(zsh-kitty archlinux extract encode64 gnu-utils golang history-substring-search ipfs httpie jira jsontools kate keychain kubectl microk8s nmap macos pass pip pipenv pyenv pylint python rbenv rsync ruby rust safe-paste screen shell-proxy ssh-agent sudo systemadmin systemd taskwarrior terraform themes tmux tmux-cssh tmuxinator torrent urltools vundle yum virtualenv zsh-autosuggestions zsh-syntax-highlighting gpg-agent gem git-extras firewalld docker-compose docker cp rust bundler aws autoupdate ansible)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -35,6 +35,7 @@ export PATH=$PATH:/usr/local/go/bin
 
 export PATH=$PATH:~/.local/bin/
 eval "$(register-python-argcomplete pipx)"
+eval "$(_PYMOBILEDEVICE3_COMPLETE=source_zsh pymobiledevice3)"
 
 # =====Ruby===== #
 
@@ -78,6 +79,8 @@ eval "$(register-python-argcomplete pmbootstrap)"
 
 eval "$(op completion zsh)"; compdef _op op
 
+# =====Khal===== #
+
 # =====Ansible===== #
 
 export ANSIBLE_NOCOWS=1
@@ -108,8 +111,10 @@ alias nano='vim'
 alias pls='sudo'
 alias l='ls -l'
 alias la='ls -a'
-alias lla='ls -la'
+alias lla='ls -al'
 alias lt='ls --tree'
+alias lsalrt='ls -alrt'
+alias lsh='ls -alrth'
 alias icat='kitty +kitten icat'
 alias dm='sudo dmesg -HTL'
 alias ls='lsd'
@@ -133,6 +138,8 @@ alias psa="ps auxf"
 alias psgrep="ps aux | grep -v grep | grep -i -e VSZ -e"
 alias psmem='ps auxf | sort -nr -k 4'
 alias pscpu='ps auxf | sort -nr -k 3'
+alias date='date +%m/%d/%y-%H:%M:%S'
+alias pwsh='pwsh-preview'
 
 # =====Functions===== #
 
@@ -284,6 +291,45 @@ function ssh_pcap {
 	ssh $1 tcpdump -w - -U 'not port 22' | wireshark -i - -k
 }
 
+function yy() {
+	local tmp="$(mktemp -t "yazi-cwd.XXXXX")"
+	yazi "$@" --cwd-file="$tmp"
+	if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+		cd -- "$cwd"
+	fi
+	rm -f -- "$tmp"
+}
+
+function dateplus(){ date -d "$date +$1 $2 +$3 $4 +$5 $6 +$7 $8" ; }
+function dateminus(){ date -d "$date +$1 $2 +$3 $4 +$5 $6 +$7 $8" ; }
+
+function extract() {
+    if [ -f "$1" ]; then
+        case "$1" in
+            *.tar.bz2)  tar xjf "$1"   ;;
+            *.tar.gz)   tar xzf "$1"   ;;
+            *.bz2)      bunzip2 "$1"   ;;
+            *.rar)      unrar x "$1"   ;;
+            *.gz)       gunzip "$1"    ;;
+            *.tar)      tar xf "$1"    ;;
+            *.tbz2)     tar xjf "$1"   ;;
+            *.tgz)      tar xzf "$1"   ;;
+            *.zip)      unzip "$1"     ;;
+            *.Z)        uncompress "$1" ;;
+            *.7z)       7z x "$1"      ;;
+            *.deb)      dpkg -i "$1"   ;;
+            *.tar.xz)   tar xf "$1"    ;;
+            *)          echo -e "\033[1;31mFile format not supported\033[0m" ;;
+        esac
+    else
+        echo -e "\033[1;31mFile not found\033[0m"
+    fi
+}
+
+function ctrld_info {
+	curl -s -X POST -H 'Content-Type: application/json' -d '{"uid": "$1" }' https://api.controld.com/utility\?platform\=ctrld\&version\=dev | jq
+}
+
 # =====Blur for Kitty Term===== #
 
 # if [[ $(ps --no-header -p $PPID -o comm) =~ '^yakuake|kitty$' ]]; then
@@ -302,30 +348,27 @@ fpath+=~/.zfunc
 
 ## autocomplete
 if [[ ! -o interactive ]]; then
-	return
+    return
 fi
 
 compctl -K _jina jina
 
 _jina() {
-	local words completions
-	read -cA words
+  local words completions
+  read -cA words
 
-	if [ "${#words}" -eq 2 ]; then
-		completions="$(jina commands)"
-	else
-		completions="$(jina completions ${words[2,-2]})"
-	fi
+  if [ "${#words}" -eq 2 ]; then
+    completions="$(jina commands)"
+  else
+    completions="$(jina completions ${words[2,-2]})"
+  fi
 
-	reply=(${(ps:
-		:)completions})
-	}
+  reply=(${(ps:
+:)completions})
+}
 
 # session-wise fix
 ulimit -n 4096
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
 # JINA_CLI_END
-
-
-
