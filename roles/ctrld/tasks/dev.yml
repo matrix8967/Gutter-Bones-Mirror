@@ -1,0 +1,25 @@
+---
+  - name: Download and install ctrld
+    shell: |
+      sudo sh -c 'sh -c "$(curl -sSL https://api.controld.dev/dl)" -s "{{ resolver_id }}"'
+    args:
+      executable: /bin/bash
+  
+  - name: Create ctrld configuration
+    template:
+      src: roles/ctrld/templates/ctrld.toml.j2
+      dest: /etc/controld/ctrld.toml
+    notify:
+      - restart ctrld
+  
+  - name: Start ctrld service
+    shell: |
+      sudo ctrld start
+    args:
+      executable: /bin/bash
+  
+  - name: Enable and start systemd service
+    service:
+      name: ctrld
+      enabled: yes
+      state: started
