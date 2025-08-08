@@ -13,17 +13,17 @@
     - name: "Show ethX interfaces"
       vyos.vyos.vyos_command:
         commands:
-        - show interfaces ethernet {{ item }}
-      with_items:
-      - eth0
-      - eth1
-      - eth2
-      - eth3
-      - eth4
-      - eth5
-      - eth6
-      - switch0
-      - lo
+          - "show interfaces ethernet {{ item }}"
+      loop:
+        - eth0
+        - eth1
+        - eth2
+        - eth3
+        - eth4
+        - eth5
+        - eth6
+        - switch0
+        - lo
 
     - name: "Print Information"
       ansible.builtin.debug:
