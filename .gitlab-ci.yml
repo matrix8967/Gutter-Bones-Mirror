@@ -36,7 +36,7 @@ molecule:
     DOCKER_HOST: tcp://docker:2375
   before_script:
     - apk add --no-cache python3 py3-pip git
-    - pip install molecule==24.6.0 "molecule-plugins[docker]==23.5.3" ansible==9.7.0 ansible-core==2.16.8 pytest==8.3.2 testinfra==10.1.0 ansible-lint==24.6.0
+    - pip install --break-system-packages molecule==24.6.0 "molecule-plugins[docker]==23.5.3" ansible==9.7.0 ansible-core==2.16.8 pytest==8.3.2 testinfra==10.1.0 ansible-lint==24.6.0
   script:
     - docker info
     - molecule test -s default
