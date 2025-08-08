@@ -7,6 +7,8 @@
   vars:
     resolver_id: "{{ resolver_id | default('test-resolver-id') }}"
     primary_upstream: "https://dns.google/dns-query"
+    listener_ip: "0.0.0.0"
+    listener_port: "{{ (ansible_distribution | lower) == 'ubuntu' | ternary(5355, 5354) }}"
   tasks:
     - name: Include ctrld role tasks
       import_tasks: roles/ctrld/tasks/main.yml

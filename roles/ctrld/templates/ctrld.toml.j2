@@ -1,7 +1,7 @@
 [listener]
   [listener.0]
-    ip = '0.0.0.0'
-    port = 5354
+    ip = '{{ listener_ip | default(''0.0.0.0'') }}'
+    port = {{ listener_port | default(5354) }}
 
     [listener.0.policy]
       name = 'My Policy'
