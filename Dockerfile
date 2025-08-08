@@ -18,7 +18,7 @@ RUN pip install --disable-pip-version-check \
     molecule==24.6.0 \
     "molecule-plugins[docker]==23.5.3" \
     pytest==8.3.2 \
-    testinfra==10.1.0
+    testinfra==6.0.0
 
 # Install Galaxy collections pinned by requirements.yml
 WORKDIR /workspace
