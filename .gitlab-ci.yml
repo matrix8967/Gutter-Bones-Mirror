@@ -14,6 +14,9 @@ update_scrolls_submodule:
 lint:
   image: python:3.12-slim
   before_script:
+    - apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+    - git --version
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - pip install --no-cache-dir ansible==9.7.0 ansible-core==2.16.8 ansible-lint==24.6.0 yamllint==1.35.1 pre-commit==3.7.1
   script:
     - pre-commit run --all-files
@@ -30,10 +33,12 @@ molecule:
   variables:
     DOCKER_DRIVER: overlay2
     DOCKER_TLS_CERTDIR: ""
+    DOCKER_HOST: tcp://docker:2375
   before_script:
     - apk add --no-cache python3 py3-pip git
     - pip install molecule==24.6.0 "molecule-plugins[docker]==23.5.3" ansible==9.7.0 ansible-core==2.16.8 pytest==8.3.2 testinfra==10.1.0 ansible-lint==24.6.0
   script:
+    - docker info
     - molecule test -s default
     - molecule test -s ctrld
   rules:
