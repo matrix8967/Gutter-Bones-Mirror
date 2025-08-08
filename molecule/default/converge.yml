@@ -8,10 +8,5 @@
     hostname: testhost
     allow_passwordless_sudo: false
   tasks:
-    - name: Include Debian init on Debian/Ubuntu
-      import_playbook: playbooks/Debian.yml
-      when: ansible_os_family == 'Debian'
-
-    - name: Include RHEL init on RedHat family
-      import_playbook: playbooks/RHEL.yml
-      when: ansible_os_family == 'RedHat'
+    - name: Basic connectivity
+      ansible.builtin.ping:

@@ -29,6 +29,7 @@ molecule:
     - docker:27-dind
   variables:
     DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: ""
   before_script:
     - apk add --no-cache python3 py3-pip git
     - pip install molecule==24.6.0 "molecule-plugins[docker]==23.5.3" ansible==9.7.0 ansible-core==2.16.8 pytest==8.3.2 testinfra==10.1.0 ansible-lint==24.6.0
