@@ -15,9 +15,15 @@
       dest: /etc/controld/ctrld.toml
     notify:
       - restart ctrld
-  
+
   - name: Enable and start systemd service
     ansible.builtin.service:
       name: ctrld
       enabled: yes
       state: started
+    when: ctrld_manage_service | default(true)
+
+  - name: Start ctrld without systemd (CI/non-systemd)
+    command: /usr/local/bin/ctrld start
+    changed_when: false
+    when: not (ctrld_manage_service | default(true))
