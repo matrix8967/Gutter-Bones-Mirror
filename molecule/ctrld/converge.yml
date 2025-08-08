@@ -1,0 +1,12 @@
+---
+- name: Converge ctrld
+  hosts: all
+  become: true
+  vars_files:
+    - group_vars/ctrld.yml
+  vars:
+    resolver_id: "{{ resolver_id | default('test-resolver-id') }}"
+    primary_upstream: "https://dns.google/dns-query"
+  tasks:
+    - name: Include ctrld role tasks
+      import_tasks: roles/ctrld/tasks/main.yml
