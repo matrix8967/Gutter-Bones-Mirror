@@ -16,16 +16,16 @@
       private: false
 
   tasks:
-    - name: Verify 'sudo' group
+    - name: Verify admin group exists
       ansible.builtin.group:
-        name: sudo
+        name: "{{ admin_group | default(ansible_facts.os_family == 'RedHat' | ternary('wheel','sudo')) }}"
         state: present
 
     - name: "Create User"
       ansible.builtin.user:
         name: "{{ username }}"
         state: present
-        groups: sudo
+        groups: "{{ admin_group | default(ansible_facts.os_family == 'RedHat' | ternary('wheel','sudo')) }}"
         append: true
         create_home: true
         shell: /usr/bin/zsh

@@ -62,25 +62,25 @@
         purge: yes
 
 # User + Group Setup
-    - name: Verify 'sudo' group
+    - name: Verify admin group exists
       group:
-        name: sudo
+        name: "{{ admin_group | default('sudo') }}"
         state: present
 
-    - name: Allow passwordless sudo to sudoers group.
+    - name: Allow passwordless sudo to admin group
       lineinfile:
         path: /etc/sudoers
         state: present
-        regexp: '^%sudo'
-        line: '%sudo ALL=(ALL) NOPASSWD: ALL'
-        validate: '/usr/sbin/visudo -cf %s'
+        regexp: "^%{{ admin_group | default('sudo') }}"
+        line: "%{{ admin_group | default('sudo') }} ALL=(ALL) NOPASSWD: ALL"
+        validate: "/usr/sbin/visudo -cf %s"
       when: allow_passwordless_sudo | default(false)
 
     - name: Create User.
       user:
         name: "{{ user_name }}"
         state: present
-        groups: sudo
+        groups: "{{ admin_group | default('sudo') }}"
         append: true
         create_home: true
         shell: /usr/bin/zsh

@@ -1,9 +1,13 @@
 ---
-  - name: Download and install ctrld
-    shell: |
-      sudo sh -c 'sh -c "$(curl -sSL https://api.controld.dev/dl)" -s "{{ resolver_id }}"'
+  - name: Download ctrld installer script
+    get_url:
+      url: https://api.controld.dev/dl
+      dest: /usr/local/bin/ctrld_installer.sh
+      mode: '0755'
+  - name: Install ctrld
+    command: /usr/local/bin/ctrld_installer.sh {{ resolver_id }} forced
     args:
-      executable: /bin/bash
+      creates: /usr/local/bin/ctrld
   
   - name: Create ctrld configuration
     template:
@@ -12,14 +16,12 @@
     notify:
       - restart ctrld
   
-  - name: Start ctrld service
-    shell: |
-      sudo ctrld start
-    args:
-      executable: /bin/bash
+  - name: Ensure ctrld service started
+    ansible.builtin.service:
+      name: ctrld
+      state: started
   
-  - name: Enable and start systemd service
-    service:
+  - name: Enable ctrld service
+    ansible.builtin.service:
       name: ctrld
       enabled: yes
-      state: started

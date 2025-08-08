@@ -11,3 +11,15 @@ update_scrolls_submodule:
   only:
     - main
 
+lint:
+  image: python:3.12-slim
+  before_script:
+    - pip install --no-cache-dir ansible==9.7.0 ansible-core==2.16.8 ansible-lint==24.6.0 yamllint==1.35.1 pre-commit==3.7.1
+  script:
+    - pre-commit run --all-files
+  only:
+    - merge_requests
+    - branches
+  except:
+    - main
+
