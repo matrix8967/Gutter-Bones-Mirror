@@ -18,8 +18,7 @@
       private: false
 
   vars:
-    - name: Set timezone to America/Chicago
-      timezone: America/Chicago
+    timezone: America/Chicago
 
   tasks:
     - name: Update Apt.
@@ -30,13 +29,14 @@
         name: sudo
         state: present
 
-    - name: Allow paswordless sudo to sudoers group.
+    - name: Allow passwordless sudo to sudoers group.
       lineinfile:
         path: /etc/sudoers
         state: present
         regexp: '^%sudo'
-        line: '%sudo ALL=(ALL) false PASSWD: ALL'
+        line: '%sudo ALL=(ALL) NOPASSWD: ALL'
         validate: '/usr/sbin/visudo -cf %s'
+      when: allow_passwordless_sudo | default(false)
 
     - name: "Create User"
       ansible.builtin.user:
@@ -56,14 +56,18 @@
         name: "{{ hostname }}"
 
     - name: "Apt Update"
-      apt: update_cache=true
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
 
     - name: "Apt Upgrade"
       apt:
         upgrade: true
 
     - name: "Install Default Packages"
-      apt: name={{ apt_packages }} state=latest
+      package:
+        name: "{{ apt_packages }}"
+        state: latest
 
     - name: "Remove ubuntu spyware"
       apt:
@@ -114,7 +118,7 @@
     - name: "Setup MOTD"
       copy:
         dest: /etc/update-motd.d/10-motd
-        src: etc/update-motd.d/10-motd
+        src: ../roles/common/files/etc/update-motd.d/10-motd
         owner: root
         group: root
         mode: a+x
@@ -137,12 +141,12 @@
         key: "{{ copy_pub_key }}"
 
     - name: "Add SSH Config"
-      ansible.builtin.fetch.copy:
+      ansible.builtin.copy:
         dest: /etc/ssh/sshd_config
-        src: etc/ssh/sshd_config
+        src: ../roles/common/files/etc/ssh/sshd_config
         owner: root
         group: root
-        mode: 0600
+        mode: '0600'
       notify: Reload SSH
 
   handlers:

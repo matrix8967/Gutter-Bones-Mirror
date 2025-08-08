@@ -6,7 +6,7 @@
     - ../group_vars/dots.yml
   tasks:
     - name: "Copy Dotfiles"
-      ansible.builtin.fetch.copy:
+      ansible.builtin.copy:
         dest: /home/{{ ansible_user }}/
         src: ../roles/common/files/home/
         owner: "{{ ansible_user }}"

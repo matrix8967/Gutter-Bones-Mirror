@@ -15,7 +15,8 @@
           owner: root
           group: root
           mode: '0644'
-      - name: Start ctrld service
-        shell: ctrld start --cd={{ resolver_id }}
-        args:
-          creates: /etc/systemd/system/ctrld.service
+      - name: Ensure ctrld service is enabled and started
+        ansible.builtin.service:
+          name: ctrld
+          enabled: true
+          state: started

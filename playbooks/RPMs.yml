@@ -10,7 +10,7 @@
   tasks:
 
     - name: "Transfer Files"
-      ansible.builtin.fetch.copy:
+      ansible.builtin.copy:
         src: "../roles/rhel/files/rpms/{{ item }}"
         dest: /home/rexuser/
 #        mode: preserve
@@ -19,6 +19,6 @@
 
     - name: "Install RPMs from local copied files"
       ansible.builtin.dnf:
-        name: "/home/azazel/{{ rpm }}"
         state: present
-        name: "{{ copied | json_query('results[?!failed].dest[]') }}"
+        disable_gpg_check: true
+        name: "{{ copied.results | map(attribute='dest') | list }}"

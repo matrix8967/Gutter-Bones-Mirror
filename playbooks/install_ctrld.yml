@@ -17,11 +17,10 @@
         mode: '0755'
 
     - name: Run the ctrld installer script
-      shell: |
-        set -x
-        /usr/local/bin/ctrld_installer.sh {{ resolver_id }} forced
+      command: /usr/local/bin/ctrld_installer.sh {{ resolver_id }} forced
+      args:
+        creates: /usr/local/bin/ctrld
       register: install_output
-      ignore_errors: yes
 
     - name: Debug ctrld installer script output
       debug:
@@ -30,7 +29,6 @@
     - name: Check if ctrld is installed
       command: /usr/local/bin/ctrld --version
       register: result
-      ignore_errors: yes
 
     - name: Fail if ctrld is not found
       fail:

@@ -19,14 +19,18 @@
       apt: name=aptitude update_cache=yes state=latest force_apt_get=yes
       
     - name: Apt Update.
-      apt: update_cache=yes
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
 
     - name: Apt Upgrade.
       apt:
         upgrade: 'yes'
 
     - name: Install Default Packages.
-      apt: name={{ apt_packages }} state=latest
+      package:
+        name: "{{ apt_packages }}"
+        state: latest
 
     - name: Remove ubuntu spyware
       apt:
@@ -63,13 +67,14 @@
         name: sudo
         state: present
 
-    - name: Allow paswordless sudo to sudoers group.
+    - name: Allow passwordless sudo to sudoers group.
       lineinfile:
         path: /etc/sudoers
         state: present
         regexp: '^%sudo'
         line: '%sudo ALL=(ALL) NOPASSWD: ALL'
         validate: '/usr/sbin/visudo -cf %s'
+      when: allow_passwordless_sudo | default(false)
 
     - name: Create User.
       user:

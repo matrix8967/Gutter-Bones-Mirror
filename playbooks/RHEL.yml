@@ -43,13 +43,13 @@
         - hostname
 
     - name: "Upgrade RHEL Family OS packages"
-      ansible.legacy.dnf:
+      ansible.builtin.dnf:
         name: "*"
         state: latest
       when: ansible_os_family == "RedHat"
 
     - name: "Install RHEL Packages"
-      ansible.legacy.dnf:
+      ansible.builtin.dnf:
         name: "{{ dnf_packages }}"
         state: "latest"
 
@@ -90,7 +90,7 @@
         group: root
 
     - name: "Setup new motd"
-      ansible.builtin.fetch.copy:
+      ansible.builtin.copy:
         dest: /etc/update-motd.d/10-motd
         src: ../roles/common/files/etc/update-motd.d/10-motd
         owner: root
@@ -104,11 +104,11 @@
       ignore_errors: true
 
     - name: "Stop and disable unnecessary services"
-      ansible.builtin.systemd.service:
+      ansible.builtin.systemd:
         name: "{{ item }}"
         state: stopped
         enabled: false
-      with_items: "{{ unnecessary_services }}"
+      loop: "{{ unnecessary_services }}"
       ignore_errors: true
 
     - name: "Enable ports on the list"
@@ -128,7 +128,7 @@
         key: "{{ copy_pub_key }}"
 
     - name: "Add hardened SSH config"
-      ansible.builtin.fetch.copy:
+      ansible.builtin.copy:
         dest: /etc/ssh/sshd_config
         src: ../roles/common/files/etc/ssh/sshd_config
         owner: root
