@@ -1,0 +1,22 @@
+---
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Install prerequisites for systemd and networking
+      package:
+        name:
+          - systemd
+          - iproute2
+          - net-tools
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Install prerequisites on RedHat family
+      package:
+        name:
+          - systemd
+          - iproute
+          - net-tools
+        state: present
+      when: ansible_os_family == 'RedHat'
