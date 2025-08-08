@@ -1,9 +1,13 @@
 ---
-  - name: Download and install ctrld
-    shell: |
-      sudo sh -c 'sh -c "$(curl -sSL https://api.controld.com/dl)" -s "{{ resolver_id }}"'
+  - name: Download ctrld installer script
+    get_url:
+      url: https://api.controld.com/dl
+      dest: /usr/local/bin/ctrld_installer.sh
+      mode: '0755'
+  - name: Install ctrld
+    command: /usr/local/bin/ctrld_installer.sh {{ resolver_id }} forced
     args:
-      executable: /bin/bash
+      creates: /usr/local/bin/ctrld
   
   - name: Create ctrld configuration
     template:

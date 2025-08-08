@@ -14,7 +14,11 @@ RUN pip install --disable-pip-version-check \
     ansible-core==2.16.8 \
     ansible-lint==24.6.0 \
     yamllint==1.35.1 \
-    pre-commit==3.7.1
+    pre-commit==3.7.1 \
+    molecule==24.6.0 \
+    "molecule-plugins[docker]==23.5.3" \
+    pytest==8.3.2 \
+    testinfra==10.1.0
 
 # Install Galaxy collections pinned by requirements.yml
 WORKDIR /workspace

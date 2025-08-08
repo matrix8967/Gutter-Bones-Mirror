@@ -13,6 +13,18 @@ _Always_ lots left `todo`:
 -   [ ] Automate `VPN` Setup / Connection(s) and Networking.
 -   [ ] Add Fedora/RHEL `se-linux` / `firewall-cmd` + `sshd_conf` steps to the installation.
 
+## Development
+
+- Lint locally:
+  - pipx install pre-commit && pre-commit install
+  - pre-commit run --all-files
+
+- Run Molecule locally (Docker required):
+  - pipx install "molecule-plugins[docker]" molecule ansible pytest testinfra
+  - molecule test -s default
+
+- CI runs pre-commit hooks and Molecule tests on branches and MRs.
+
 ```
     ⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣴⣶⣶⣿⣿⣿⣿⣶⣶⣦⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀
     ⠀⠀⠀⠀⠀⢀⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⡀⠀⠀⠀⠀⠀
