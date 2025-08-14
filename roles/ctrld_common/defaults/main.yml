@@ -1,0 +1,10 @@
+ctrld_version: "1.4.5"
+ctrld_platform_map:
+  Linux: linux-amd64
+  Darwin: darwin-arm64
+  Windows: windows-amd64
+ctrld_dest: "/usr/local/bin/ctrld"
+ctrld_env:
+  CTRLD_API_KEY: "{{ lookup('env','CTRLD_API_KEY') | default('', true) }}"
+  CTRLD_LOG_LEVEL: info
+ctrld_doh_url: "https://dns.controld.com/3oaaimy614"

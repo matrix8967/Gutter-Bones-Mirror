@@ -1,0 +1,28 @@
+---
+- name: Verify ctrld
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check ctrld is running
+      ansible.builtin.shell: |
+        ps aux | grep -v grep | grep -q ctrld
+      register: ps
+      changed_when: false
+
+    - name: Verify DNS over HTTPS via verify.controld.com
+      ansible.builtin.shell: |
+        doggo -q verify.controld.com --doh --doh-url "{{ ctrld_doh_url }}" -t A -j
+      register: doh
+      changed_when: false
+      failed_when: doh.rc != 0
+
+    - name: Save artifacts
+      ansible.builtin.copy:
+        content: |
+          == ps ==
+          {{ ps.stdout }}
+
+          == doh ==
+          {{ doh.stdout }}
+        dest: "{{ lookup('env','CI_PROJECT_DIR') | default('/tmp', true) }}/artifacts/{{ inventory_hostname }}.txt"
+      delegate_to: localhost

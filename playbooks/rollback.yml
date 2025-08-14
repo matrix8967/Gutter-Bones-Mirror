@@ -1,0 +1,17 @@
+---
+- name: Remove/disable ctrld
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Stop service (best-effort)
+      ansible.builtin.shell: |
+        if command -v systemctl >/dev/null; then systemctl stop ctrld || true; fi
+      changed_when: false
+
+    - name: Remove binaries/configs (scoped)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/bin/ctrld
+        - /etc/ctrld

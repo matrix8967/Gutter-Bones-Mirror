@@ -1,0 +1,8 @@
+---
+- name: Stub: copy binary to /opt/ctrld
+  ansible.builtin.debug:
+    msg: "EdgeOS: placeholder for ctrld install"
+
+- name: Stub: enable on boot
+  ansible.builtin.debug:
+    msg: "EdgeOS: placeholder for startup script"

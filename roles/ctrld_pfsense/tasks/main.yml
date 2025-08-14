@@ -1,0 +1,9 @@
+---
+- name: Stub: copy binary to /usr/local/bin
+  ansible.builtin.debug:
+    msg: "pfSense/OPNsense: placeholder for ctrld install"
+
+- name: Stub: enable on boot
+  ansible.builtin.debug:
+    msg: "pfSense/OPNsense: placeholder for startup script"
+

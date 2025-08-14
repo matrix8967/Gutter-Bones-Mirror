@@ -1,0 +1,24 @@
+---
+- name: Ensure /jffs/controld exists
+  ansible.builtin.file:
+    path: /jffs/controld
+    state: directory
+    mode: '0755'
+
+- name: Download and verify ctrld binary for OpenWrt
+  verify_ctrld:
+    url: "https://github.com/Control-D-Inc/ctrld/releases/download/v{{ ctrld_version }}/ctrld-linux-mipsel"
+    checksum_url: "https://github.com/Control-D-Inc/ctrld/releases/download/v{{ ctrld_version }}/SHA256SUMS"
+    dest: "/jffs/controld/ctrld"
+
+- name: Drop environment file
+  ansible.builtin.template:
+    src: ctrld.env.j2
+    dest: /jffs/controld/ctrld.env
+    mode: '0644'
+
+- name: Enable ctrld on boot (init script stub)
+  ansible.builtin.shell: |
+    echo "TODO: hook ctrld binary into /etc/init.d or rc.local for startup"
+  args:
+    warn: false

@@ -1,0 +1,8 @@
+---
+- name: Stub: install plist
+  ansible.builtin.debug:
+    msg: "macOS: placeholder for LaunchDaemon plist install"
+
+- name: Stub: load service
+  ansible.builtin.debug:
+    msg: "macOS: placeholder for launchctl load"

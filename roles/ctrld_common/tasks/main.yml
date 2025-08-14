@@ -1,0 +1,12 @@
+---
+- name: Ensure directories
+  ansible.builtin.file:
+    path: /etc/ctrld
+    state: directory
+    mode: '0755'
+
+- name: Drop environment file
+  ansible.builtin.template:
+    src: ctrld.env.j2
+    dest: /etc/ctrld/ctrld.env
+    mode: '0644'

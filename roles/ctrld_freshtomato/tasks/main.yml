@@ -1,0 +1,9 @@
+---
+- name: Stub: copy binary to /jffs/controld/ctrld
+  ansible.builtin.debug:
+    msg: "FreshTomato: placeholder for ctrld install"
+
+- name: Stub: enable on boot
+  ansible.builtin.debug:
+    msg: "FreshTomato: placeholder for rc.d script"
+

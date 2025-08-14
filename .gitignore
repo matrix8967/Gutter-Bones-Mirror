@@ -1,1 +1,16 @@
 .Vault_Pass.txt
+# Python
+__pycache__/
+*.pyc
+
+# Ansible
+*.retry
+.molecule/
+
+# Docker
+*.tar
+*.log
+
+# General
+*.swp
+.DS_Store

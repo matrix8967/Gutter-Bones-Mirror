@@ -1,0 +1,36 @@
+---
+- name: Ensure /usr/local/bin exists
+  ansible.builtin.file:
+    path: /usr/local/bin
+    state: directory
+    mode: '0755'
+
+- name: Download and verify ctrld binary
+  verify_ctrld:
+    url: "https://github.com/Control-D-Inc/ctrld/releases/download/v{{ ctrld_version }}/ctrld-linux-amd64"
+    checksum_url: "https://github.com/Control-D-Inc/ctrld/releases/download/v{{ ctrld_version }}/SHA256SUMS"
+    dest: "{{ ctrld_dest }}"
+
+- name: Ensure /etc/ctrld directory
+  ansible.builtin.file:
+    path: /etc/ctrld
+    state: directory
+    mode: '0755'
+
+- name: Drop environment file
+  ansible.builtin.template:
+    src: ctrld.env.j2
+    dest: /etc/ctrld/ctrld.env
+    mode: '0644'
+
+- name: Install systemd unit
+  ansible.builtin.template:
+    src: ctrld.service.j2
+    dest: /etc/systemd/system/ctrld.service
+
+- name: Enable and start ctrld service
+  ansible.builtin.systemd:
+    name: ctrld
+    enabled: true
+    state: started
+    daemon_reload: true

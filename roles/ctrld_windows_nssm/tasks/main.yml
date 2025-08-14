@@ -1,0 +1,12 @@
+---
+- name: Stub: ensure NSSM installed
+  ansible.builtin.debug:
+    msg: "Windows: placeholder for NSSM install"
+
+- name: Stub: install service
+  ansible.builtin.debug:
+    msg: "Windows: placeholder for ctrld NSSM service"
+
+- name: Stub: start service
+  ansible.builtin.debug:
+    msg: "Windows: placeholder for starting ctrld service"

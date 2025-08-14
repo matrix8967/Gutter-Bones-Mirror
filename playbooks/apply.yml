@@ -1,0 +1,10 @@
+---
+- name: Install + configure ctrld
+  hosts: all
+  gather_facts: true
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all.yml"
+  roles:
+    - role: ctrld_common
+    - { role: ctrld_linux_systemd, when: ansible_system == 'Linux' and 'systemd' in ansible_facts['service_mgr']|default('') }
+    - { role: ctrld_openwrt, when: group_names | select('search', 'openwrt') | list | length > 0 }
