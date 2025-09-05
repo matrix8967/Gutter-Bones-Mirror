@@ -23,7 +23,7 @@ This repository contains infrastructure automation for the **darkfort** network 
 
 ### **Network Information Protected**
 - **Production Subnet:** `10.10.10.0/24` (VLAN 10)
-- **Lab Subnet:** `10.20.20.0/24` (VLAN 20) 
+- **Lab Subnet:** `10.20.20.0/24` (VLAN 20)
 - **DMZ Subnet:** `10.30.30.0/24` (VLAN 30)
 - **Device Hostnames:** All `.darkfort` domain systems
 - **Service Configurations:** DNS, monitoring, infrastructure services
@@ -125,7 +125,7 @@ ansible-playbook --syntax-check -i inventory/hosts playbooks/Init.yml
 
 **Immediate Actions:**
 1. 🚨 **STOP** all repository access
-2. 📞 **Notify team** immediately  
+2. 📞 **Notify team** immediately
 3. 🔄 **Rotate exposed credentials**
 4. 📝 **Document the incident**
 
@@ -160,7 +160,7 @@ git add <sensitive_file>
 
 ### **Pipeline Security**
 - Encrypted files are automatically decrypted during CI runs
-- Sensitive variables are masked in job logs  
+- Sensitive variables are masked in job logs
 - Test environments use isolated networks
 - Production deployments require manual approval
 
@@ -233,7 +233,7 @@ find . -name "*.yml" -exec grep -l "ANSIBLE_VAULT" {} \;
 
 ### **Encryption Standards**
 - ✅ **AES-256** encryption for all sensitive data
-- ✅ **PBKDF2** key derivation with random salts  
+- ✅ **PBKDF2** key derivation with random salts
 - ✅ **Perfect Forward Secrecy** via unique vault passwords
 - ✅ **Regular key rotation** on security incidents
 
@@ -251,8 +251,8 @@ find . -name "*.yml" -exec grep -l "ANSIBLE_VAULT" {} \;
 
 ---
 
-**Document Version:** 2.0  
-**Last Updated:** 2024-12-28  
-**Security Review:** Required before major releases  
-**Classification:** Internal Use - Infrastructure Team Only  
+**Document Version:** 2.0
+**Last Updated:** 2024-12-28
+**Security Review:** Required before major releases
+**Classification:** Internal Use - Infrastructure Team Only
 **Repository:** Gutter Bonez Infrastructure Automation

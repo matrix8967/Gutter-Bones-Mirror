@@ -24,7 +24,7 @@ done
 ### **Files That MUST Be Encrypted:**
 - [ ] `inventory/hosts` - Contains all darkfort IP addresses and hostnames
 - [ ] `inventory/example_ctrld_deployment.yml` - Contains network topology
-- [ ] `group_vars/all.yml` - Contains network configuration and IPs  
+- [ ] `group_vars/all.yml` - Contains network configuration and IPs
 - [ ] `group_vars/edgeos.yml` - Contains EdgeRouter 8 Pro configuration
 - [ ] `group_vars/debian.yml` - Contains SSH keys and network references
 - [ ] `group_vars/init.yml` - Contains system configuration details
@@ -139,10 +139,10 @@ Verify documentation reflects encryption:
    ```bash
    # Remove from staging (if not yet pushed)
    git reset HEAD <sensitive_file>
-   
+
    # Encrypt the file
    ansible-vault encrypt <sensitive_file>
-   
+
    # Re-add to staging
    git add <sensitive_file>
    ```
@@ -179,7 +179,7 @@ Once all checks pass:
 git add .
 
 # Commit with descriptive message
-git commit -m "feat: darkfort network infrastructure automation
+git commit -m "Full refactor. Minimal testing, maximum vibes. glhf.
 
 - Add comprehensive inventory for darkfort network (encrypted)
 - Implement ctrld deployment configurations (encrypted)
@@ -212,7 +212,7 @@ head -1 filename | grep -q "ANSIBLE_VAULT" && echo "Encrypted" || echo "Plaintex
 
 ---
 
-**Last Updated:** 2024-12-28  
-**Maintained By:** Azazel (QA & Support Engineer)  
-**Repository:** Gutter Bonez Infrastructure Automation  
+**Last Updated:** 2024-12-28
+**Maintained By:** Azazel (QA & Support Engineer)
+**Repository:** Gutter Bonez Infrastructure Automation
 **Network:** Darkfort (.darkfort domain)
