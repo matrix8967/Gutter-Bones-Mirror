@@ -1,0 +1,229 @@
+---
+# Ansible Vault Template File
+# Copy this file to vault.yml and customize with your actual secrets
+# Then encrypt with: ansible-vault encrypt group_vars/vault.yml
+
+# ===========================
+# AUTHENTICATION CREDENTIALS
+# ===========================
+
+# SSH Keys and Authentication
+vault_ssh_private_key: |
+  -----BEGIN OPENSSH PRIVATE KEY-----
+  # REPLACE WITH YOUR ACTUAL PRIVATE KEY CONTENT
+  # Generate with: ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+  -----END OPENSSH PRIVATE KEY-----
+
+vault_ssh_public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAA... your_email@hostname"
+
+# Service Account Credentials
+vault_service_accounts:
+  gitlab_runner:
+    username: "YOUR_GITLAB_RUNNER_USER"
+    ssh_key: "{{ vault_ssh_private_key }}"
+  automation:
+    username: "YOUR_AUTOMATION_USER"
+    ssh_key: "{{ vault_ssh_private_key }}"
+
+# ===========================
+# NETWORK INFRASTRUCTURE
+# ===========================
+
+# Router and Network Device Credentials
+vault_network_credentials:
+  edgerouter_admin:
+    username: "YOUR_EDGEROUTER_USERNAME"
+    password: "YOUR_EDGEROUTER_PASSWORD"
+  asuswrt_admin:
+    username: "YOUR_ASUSWRT_USERNAME"
+    password: "YOUR_ASUSWRT_PASSWORD"
+  mikrotik_admin:
+    username: "YOUR_MIKROTIK_USERNAME"
+    password: "YOUR_MIKROTIK_PASSWORD"
+  unifi_admin:
+    username: "YOUR_UNIFI_USERNAME"
+    password: "YOUR_UNIFI_PASSWORD"
+
+# Network Device SSH Keys
+vault_network_ssh_keys:
+  router_key: |
+    -----BEGIN OPENSSH PRIVATE KEY-----
+    # REPLACE WITH YOUR ROUTER-SPECIFIC SSH KEY
+    -----END OPENSSH PRIVATE KEY-----
+
+# ===========================
+# CONTROL D INTEGRATION
+# ===========================
+
+# Control D API and Service Credentials
+vault_controld_credentials:
+  api_key: "YOUR_CONTROLD_API_KEY_HERE"
+  device_id: "YOUR_DEVICE_ID_HERE"
+  organization_id: "YOUR_ORG_ID_HERE"
+  resolver_id: "YOUR_RESOLVER_ID_HERE"
+
+# Control D Service Configuration
+vault_controld_config:
+  upstream_resolvers:
+    - name: "primary"
+      endpoint: "https://freedns.controld.com/p1"
+      bootstrap_ip: "76.76.19.19"
+    - name: "secondary"
+      endpoint: "https://freedns.controld.com/p2"
+      bootstrap_ip: "76.76.2.22"
+
+  listeners:
+    - ip: "127.0.0.1"
+      port: 53
+      policy: "default"
+    - ip: "0.0.0.0"
+      port: 5353
+      policy: "strict"
+
+# ===========================
+# MONITORING & OBSERVABILITY
+# ===========================
+
+# Monitoring Service Credentials
+vault_monitoring_credentials:
+  prometheus_admin:
+    username: "admin"
+    password: "YOUR_PROMETHEUS_ADMIN_PASSWORD"
+  grafana_admin:
+    username: "admin"
+    password: "YOUR_GRAFANA_ADMIN_PASSWORD"
+    api_key: "YOUR_GRAFANA_API_KEY"
+
+# External Monitoring Integrations
+vault_external_monitoring:
+  slack_webhook: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+  pagerduty_key: "YOUR_PAGERDUTY_INTEGRATION_KEY"
+  email_smtp:
+    server: "YOUR_SMTP_SERVER"
+    port: 587
+    username: "YOUR_SMTP_USERNAME"
+    password: "YOUR_SMTP_PASSWORD"
+
+# ===========================
+# CLOUD PROVIDER CREDENTIALS
+# ===========================
+
+# AWS Credentials (if used)
+vault_aws_credentials:
+  access_key_id: "YOUR_AWS_ACCESS_KEY_ID"
+  secret_access_key: "YOUR_AWS_SECRET_ACCESS_KEY"
+  region: "your-preferred-region"
+
+# Azure Credentials (if used)
+vault_azure_credentials:
+  client_id: "YOUR_AZURE_CLIENT_ID"
+  client_secret: "YOUR_AZURE_CLIENT_SECRET"
+  tenant_id: "YOUR_AZURE_TENANT_ID"
+  subscription_id: "YOUR_AZURE_SUBSCRIPTION_ID"
+
+# GCP Credentials (if used)
+vault_gcp_credentials:
+  service_account_key: |
+    {
+      "type": "service_account",
+      "project_id": "your-project-id",
+      "private_key_id": "your-key-id",
+      "private_key": "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----\n",
+      "client_email": "service-account@your-project.iam.gserviceaccount.com",
+      "client_id": "your-client-id",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token"
+    }
+
+# ===========================
+# DATABASE CREDENTIALS
+# ===========================
+
+# Database Connection Strings
+vault_database_credentials:
+  postgresql:
+    host: "YOUR_POSTGRESQL_HOST"
+    port: 5432
+    username: "YOUR_DB_USERNAME"
+    password: "YOUR_DB_PASSWORD"
+    database: "YOUR_DATABASE_NAME"
+
+  mysql:
+    host: "YOUR_MYSQL_HOST"
+    port: 3306
+    username: "YOUR_MYSQL_USERNAME"
+    password: "YOUR_MYSQL_PASSWORD"
+    database: "YOUR_DATABASE_NAME"
+
+# ===========================
+# APPLICATION SECRETS
+# ===========================
+
+# Application API Keys and Secrets
+vault_application_secrets:
+  jwt_secret: "YOUR_JWT_SIGNING_SECRET_HERE"
+  encryption_key: "YOUR_APPLICATION_ENCRYPTION_KEY"
+  api_keys:
+    external_service_1: "YOUR_API_KEY_FOR_SERVICE_1"
+    external_service_2: "YOUR_API_KEY_FOR_SERVICE_2"
+
+# Third-party Service Integration
+vault_third_party_integrations:
+  github:
+    token: "ghp_YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
+    webhook_secret: "YOUR_GITHUB_WEBHOOK_SECRET"
+
+  gitlab:
+    token: "glpat-YOUR_GITLAB_ACCESS_TOKEN"
+    runner_token: "YOUR_GITLAB_RUNNER_REGISTRATION_TOKEN"
+
+# ===========================
+# CERTIFICATE AND TLS
+# ===========================
+
+# SSL/TLS Certificates and Keys
+vault_ssl_certificates:
+  internal_ca_key: |
+    -----BEGIN PRIVATE KEY-----
+    # REPLACE WITH YOUR INTERNAL CA PRIVATE KEY
+    -----END PRIVATE KEY-----
+
+  internal_ca_cert: |
+    -----BEGIN CERTIFICATE-----
+    # REPLACE WITH YOUR INTERNAL CA CERTIFICATE
+    -----END CERTIFICATE-----
+
+# ===========================
+# BACKUP AND RECOVERY
+# ===========================
+
+# Backup Service Credentials
+vault_backup_credentials:
+  s3_backup:
+    access_key: "YOUR_BACKUP_ACCESS_KEY_ID"
+    secret_key: "YOUR_BACKUP_SECRET_ACCESS_KEY"
+    bucket: "your-infrastructure-backups-bucket"
+
+  rsync_backup:
+    username: "YOUR_BACKUP_USERNAME"
+    ssh_key: "{{ vault_ssh_private_key }}"
+    destination: "YOUR_BACKUP_SERVER"
+
+# ===========================
+# SETUP INSTRUCTIONS
+# ===========================
+
+# 1. Copy this file: cp vault_template.yml vault.yml
+# 2. Replace ALL placeholder values with your actual secrets
+# 3. Encrypt the file: ansible-vault encrypt vault.yml
+# 4. Test vault access: ansible-vault view vault.yml
+# 5. Reference variables in playbooks as: "{{ vault_variable_name }}"
+
+# Security Guidelines:
+# - Use strong, unique passwords (consider using a password manager)
+# - Generate SSH keys specifically for automation (don't reuse personal keys)
+# - Regularly rotate all credentials
+# - Keep vault password secure and backed up separately
+# - Never commit unencrypted vault files to version control
+# - Use different vault files for different environments (dev/staging/prod)
+# - Regularly audit who has access to vault passwords

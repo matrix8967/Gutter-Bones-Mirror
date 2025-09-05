@@ -1,14 +1,94 @@
 ---
 collections:
+  # Core networking collections
   - name: community.network
     source: https://galaxy.ansible.com
+    version: ">=5.0.0"
+
   - name: community.general
     source: https://galaxy.ansible.com
+    version: ">=7.0.0"
+
+  # Router and network device collections
   - name: community.routeros
     source: https://galaxy.ansible.com
+    version: ">=2.0.0"
+
   - name: vyos.vyos
     source: https://galaxy.ansible.com
+    version: ">=4.0.0"
+
+  # Virtualization collections
   - name: community.libvirt
     source: https://galaxy.ansible.com
+    version: ">=1.2.0"
+
+  # POSIX collections for Unix/Linux systems
   - name: ansible.posix
     source: https://galaxy.ansible.com
+    version: ">=1.4.0"
+
+  # Windows support collections
+  - name: ansible.windows
+    source: https://galaxy.ansible.com
+    version: ">=1.14.0"
+
+  - name: community.windows
+    source: https://galaxy.ansible.com
+    version: ">=1.13.0"
+
+  # Container and cloud collections
+  - name: containers.podman
+    source: https://galaxy.ansible.com
+    version: ">=1.9.0"
+
+  - name: community.docker
+    source: https://galaxy.ansible.com
+    version: ">=3.4.0"
+
+  # Additional utility collections
+  - name: community.crypto
+    source: https://galaxy.ansible.com
+    version: ">=2.10.0"
+
+  - name: community.dns
+    source: https://galaxy.ansible.com
+    version: ">=2.5.0"
+
+  # ctrld Ansible Role: https://github.com/wandansible/ctrld
+   - name: wandansible.ctrld
+     src: https://github.com/wandansible/ctrld
+
+  # Platform-specific collections for router testing
+  - name: community.fortios
+    source: https://galaxy.ansible.com
+    version: ">=1.0.0"
+
+  - name: junipernetworks.junos
+    source: https://galaxy.ansible.com
+    version: ">=5.0.0"
+
+  # Monitoring and observability
+  - name: community.grafana
+    source: https://galaxy.ansible.com
+    version: ">=1.5.0"
+
+  - name: community.zabbix
+    source: https://galaxy.ansible.com
+    version: ">=1.9.0"
+
+  # Windows package management
+  - name: chocolatey.chocolatey
+    source: https://galaxy.ansible.com
+    version: ">=1.5.0"
+
+roles:
+  # Essential infrastructure roles (using Galaxy namespace)
+  - name: geerlingguy.docker
+    version: "6.1.0"
+
+  - name: geerlingguy.pip
+    version: "2.2.0"
+
+  # Note: tcpdump will be installed via package manager in playbooks
+  # as Galaxy roles for tcpdump are unreliable

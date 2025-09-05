@@ -1,4 +1,337 @@
+# Gutter Bonez Infrastructure Automation - GitIgnore
+# Comprehensive security and cleanup rules for darkfort network automation
+
+# ==========================================
+# ANSIBLE VAULT & SECRETS
+# ==========================================
+
+# Vault password files (CRITICAL - NEVER COMMIT)
 .Vault_Pass.txt
+.vault_pass
+.vault_password
+vault_pass*
+ansible_vault_pass*
+
+# SSH Keys and Certificates (SECURITY CRITICAL)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.pub
+!requirements.yml
+
+# API Keys and Tokens
+.env
+.env.*
+*.token
+*_token
+api_key*
+*_key.txt
+secrets.yml
+secrets.yaml
+credentials.yml
+credentials.yaml
+
+# ==========================================
+# ANSIBLE TEMPORARY FILES
+# ==========================================
+
+# Ansible retry files
+*.retry
+
+# Ansible facts cache
+fact_cache/
+.fact_cache/
+ansible_facts/
+
+# Ansible collections and roles downloaded locally
+collections/
+galaxy_collections/
+.ansible/
+
+# Ansible logs
+ansible.log
+*.ansible.log
+
+# Temporary inventory files
+inventory_temp*
+temp_inventory*
+.inventory_*
+
+# ==========================================
+# TESTING & VALIDATION TEMPORARY FILES
+# ==========================================
+
+# Test results and temporary directories
+/tmp/gutter_bonez_*
+test_results/
+chaos_results/
+discovery_results/
+ci_results/
+*_test_results/
+
+# DNS Security Testing temporary files
+/tmp/gutter_bonez_dns_security/
+dns_security_results/
+dns_test_reports/
+*_dns_security_*
+dns_baseline_*
+dns_poisoning_*
+malicious_domain_test_*
+captive_portal_test_*
+
+# Validation temporary files
+dummy_inventory*
+temp_inv*
+validation_temp*
+
+# Performance and benchmark outputs
+*.perf
+benchmark_*
+load_test_*
+
+# ==========================================
+# NETWORK DISCOVERY SENSITIVE DATA
+# ==========================================
+
+# Network topology and device discovery
+network_topology_*.json
+device_discovery_*.json
+*_topology.json
+*_discovery.json
+
+# Network scan results (may contain sensitive IPs/MAC addresses)
+nmap_scan_*
+network_scan_*
+*_scan_results*
+
+# SNMP community strings and network credentials
+snmp_config*
+network_creds*
+
+# ==========================================
+# ROUTER & DEVICE CONFIGURATIONS
+# ==========================================
+
+# Router configuration backups (may contain sensitive data)
+*_config_backup*
+router_backup_*
+*.cfg.backup
+*.conf.backup
+
+# Device-specific sensitive files
+*_device_config*
+firmware_*
+router_creds*
+
+# ==========================================
+# DEVELOPMENT & IDE FILES
+# ==========================================
+
+# Claude AI context files
 .claude/
 .claude
 .claude/*
+claude_context*
+
+# VSCode/VSCodium
+.vscode/
+.vscode/*
+*.code-workspace
+
+# Zed editor
+.zed/
+*.zed
+
+# Vim/Neovim
+*.swp
+*.swo
+*~
+.*.swp
+.*.swo
+
+# Emacs
+*~
+\#*\#
+.\#*
+*.elc
+
+# IDE project files
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# ==========================================
+# OPERATING SYSTEM FILES
+# ==========================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Linux
+.directory
+*.tmp
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ==========================================
+# BACKUP & LOG FILES
+# ==========================================
+
+# Backup files
+*.backup
+*.bak
+*.orig
+*.save
+*~
+
+# Log files
+*.log
+logs/
+log/
+*.out
+*.err
+
+# Compressed backup files
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+backup_*.tar.*
+
+# ==========================================
+# PYTHON & DEVELOPMENT
+# ==========================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.env
+
+# Node.js (if using for tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# DOCUMENTATION BUILDS
+# ==========================================
+
+# Generated documentation
+docs/_build/
+docs/build/
+site/
+_site/
+
+# ==========================================
+# CUSTOM GUTTER BONEZ SENSITIVE PATTERNS
+# ==========================================
+
+# Control D specific sensitive data
+controld_config*
+ctrld_secrets*
+resolver_credentials*
+
+# DNS Security Testing sensitive outputs
+dns_security_report_*.html
+dns_security_results_*.json
+*_ci_variables.env
+test_summary_*.json
+
+# Darkfort network specific sensitive files
+darkfort_secrets*
+*_darkfort_*sensitive*
+network_passwords*
+
+# Certificate and PKI files
+ca.crt
+ca.key
+server.crt
+server.key
+client.crt
+client.key
+*.csr
+
+# Database dumps or sensitive data exports
+*.sql
+*.dump
+*_export.*
+sensitive_data*
+
+# Custom encrypted files (before vault encryption)
+*_plaintext*
+*_unencrypted*
+pre_vault_*
+
+# Demo and testing temporary inventories
+*_demo_inventory*
+/tmp/test_inventory*
+/tmp/gutter_bonez_demo_*
+
+# ==========================================
+# ALLOWLIST EXCEPTIONS
+# ==========================================
+
+# Force include some files that might be caught by patterns above
+!requirements.yml
+!.gitignore
+!.gitlab-ci.yml
+!README.md
+!**/templates/*.j2
+!docs/**/*.md
+
+# ==========================================
+# PROJECT SPECIFIC TEMPORARY FILES
+# ==========================================
+
+# Ansible Galaxy temporary downloads
+.tmp/
+tmp/
+
+# Custom shell script outputs
+script_output*
+command_output*
+execution_log*
+
+# Performance monitoring temporary files
+system_stats*
+performance_data*
+monitoring_temp*
+
+# ==========================================
+# NOTES FOR MAINTAINERS
+# ==========================================
+#
+# Remember to encrypt the following files with ansible-vault before committing:
+# - inventory/hosts
+# - inventory/example_ctrld_deployment.yml
+# - group_vars/*.yml (containing sensitive data)
+# - Any files with passwords, API keys, or network topology
+#
+# Use: ansible-vault encrypt <filename>
+# Edit: ansible-vault edit <filename>
+# Decrypt temporarily: ansible-vault decrypt <filename> --output=-
+#
+
+/net-commander

@@ -1,0 +1,203 @@
+#!/bin/bash
+# MOTD Template - Managed by Ansible
+# Generated on {{ ansible_date_time.iso8601 }}
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# System Information
+HOSTNAME=$(hostname)
+KERNEL=$(uname -r)
+UPTIME=$(uptime -p 2>/dev/null || uptime | awk -F'( |,|:)+' '{print $6,$7",",$8,"hours,",$9,"minutes"}')
+LOAD=$(uptime | awk -F'load average:' '{print $2}' | xargs)
+
+# Platform-specific information gathering
+{% if ansible_system == 'Linux' %}
+DISTRO="{{ ansible_distribution }} {{ ansible_distribution_version }}"
+ARCH="{{ ansible_architecture }}"
+MEMORY=$(free -h | awk '/^Mem/ {print $3 "/" $2}' 2>/dev/null || echo "N/A")
+DISK=$(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 " used)"}' 2>/dev/null || echo "N/A")
+CPU=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || echo "N/A")
+PROCESSES=$(ps aux | wc -l)
+IP_ADDR=$(hostname -I 2>/dev/null | awk '{print $1}' || ip route get 8.8.8.8 2>/dev/null | awk '{print $7; exit}' || echo "N/A")
+{% elif ansible_system == 'Darwin' %}
+DISTRO="macOS $(sw_vers -productVersion)"
+ARCH="{{ ansible_architecture }}"
+MEMORY=$(vm_stat | perl -ne '/page size of (\d+)/ and $size=$1; /Pages free:\s+(\d+)/ and printf("%.1fG", $1 * $size / 1024 / 1024 / 1024)')
+DISK=$(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 " used)"}')
+CPU=$(sysctl -n machdep.cpu.brand_string)
+PROCESSES=$(ps aux | wc -l | xargs)
+IP_ADDR=$(ifconfig | grep -E 'inet.*broadcast' | awk '{print $2}' | head -1)
+{% else %}
+DISTRO="{{ ansible_system }}"
+ARCH="{{ ansible_architecture }}"
+MEMORY="N/A"
+DISK="N/A"
+CPU="N/A"
+PROCESSES="N/A"
+IP_ADDR="N/A"
+{% endif %}
+
+# Network Services Status
+{% if ansible_system == 'Linux' %}
+SSH_STATUS=$(systemctl is-active ssh 2>/dev/null || systemctl is-active sshd 2>/dev/null || echo "unknown")
+{% if init_config is defined and init_config.setup_firewall %}
+FIREWALL_STATUS=$(systemctl is-active ufw 2>/dev/null || systemctl is-active firewalld 2>/dev/null || echo "unknown")
+{% endif %}
+{% endif %}
+
+# Last login information
+LAST_LOGIN=$(last -1 {{ user_name | default('$USER') }} 2>/dev/null | head -1 | awk '{for(i=4;i<=6;i++) printf $i" "; print ""}' || echo "N/A")
+
+# Custom ASCII Art
+echo -e "${CYAN}"
+cat << 'EOF'
+    ⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣴⣶⣶⣿⣿⣿⣿⣶⣶⣦⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⢀⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⡀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀
+    ⠀⠀⢀⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡀⠀⠀
+    ⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⠀⠀
+    ⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⢻⣿⣿⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀
+    ⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⠿⠫⢀⣼⣿⣿⣇⠉⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀
+    ⠀⢸⣿⣿⣿⣿⣭⣉⣉⣁⣠⣴⣾⣿⣿⣿⣿⣷⣤⣠⢀⠉⣉⣾⣿⣿⣿⣿⡇⠀
+    ⠀⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⠀
+    ⠀⠀⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠩⠩⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀
+    ⠀⠀⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⣧⣠⣠⣄⣠⣼⣿⣿⣿⣿⣿⣿⣿⣿⡿⠃⠀⠀
+    ⠀⠀⠀⠀⠙⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠋⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠈⠿⣿⣿⡿⠃⠘⢿⣿⣿⡿⠃⠘⢿⣿⣿⠿⠁⠀⠀⠀⠀⠀⠀
+EOF
+echo -e "${NC}"
+
+# Header
+echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BOLD}${WHITE}                           🦴 GUTTER BONEZ INFRASTRUCTURE 🦴                    ${NC}"
+echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# System Information
+echo -e "\n${BOLD}${CYAN}📊 SYSTEM INFORMATION${NC}"
+echo -e "${BOLD}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "│ ${YELLOW}Hostname:${NC}    $HOSTNAME"
+echo -e "│ ${YELLOW}Platform:${NC}    $DISTRO ($ARCH)"
+echo -e "│ ${YELLOW}Kernel:${NC}      $KERNEL"
+echo -e "│ ${YELLOW}CPU:${NC}         $CPU"
+echo -e "│ ${YELLOW}Memory:${NC}      $MEMORY"
+echo -e "│ ${YELLOW}Disk /:${NC}      $DISK"
+echo -e "│ ${YELLOW}Uptime:${NC}      $UPTIME"
+echo -e "│ ${YELLOW}Load Avg:${NC}    $LOAD"
+echo -e "│ ${YELLOW}Processes:${NC}   $PROCESSES"
+echo -e "${BOLD}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+
+# Network Information
+echo -e "\n${BOLD}${BLUE}🌐 NETWORK INFORMATION${NC}"
+echo -e "${BOLD}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "│ ${YELLOW}IP Address:${NC}  $IP_ADDR"
+{% if ssh_port is defined %}
+echo -e "│ ${YELLOW}SSH Port:${NC}    {{ ssh_port }}"
+{% endif %}
+{% if ansible_system == 'Linux' %}
+echo -e "│ ${YELLOW}SSH Service:${NC} $SSH_STATUS"
+{% if init_config is defined and init_config.setup_firewall %}
+echo -e "│ ${YELLOW}Firewall:${NC}    $FIREWALL_STATUS"
+{% endif %}
+{% endif %}
+echo -e "${BOLD}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+
+# Security & Access Information
+echo -e "\n${BOLD}${PURPLE}🔐 ACCESS INFORMATION${NC}"
+echo -e "${BOLD}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "│ ${YELLOW}Current User:${NC} $(whoami)"
+{% if user_name is defined %}
+echo -e "│ ${YELLOW}Admin User:${NC}   {{ user_name }}"
+{% endif %}
+echo -e "│ ${YELLOW}Last Login:${NC}   $LAST_LOGIN"
+{% if ansible_system == 'Linux' %}
+echo -e "│ ${YELLOW}Login Count:${NC}  $(who | wc -l) active session(s)"
+{% endif %}
+echo -e "${BOLD}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+
+# Role/Purpose Information
+{% if inventory_hostname is defined %}
+echo -e "\n${BOLD}${RED}🎯 SYSTEM ROLE${NC}"
+echo -e "${BOLD}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "│ ${YELLOW}Inventory Name:${NC} {{ inventory_hostname }}"
+{% if group_names is defined and group_names | length > 0 %}
+echo -e "│ ${YELLOW}Groups:${NC}       {{ group_names | join(', ') }}"
+{% endif %}
+{% if is_router is defined and is_router %}
+echo -e "│ ${YELLOW}Device Type:${NC}   Router/Network Device"
+{% elif 'servers' in group_names %}
+echo -e "│ ${YELLOW}Device Type:${NC}   Server"
+{% elif 'workstations' in group_names %}
+echo -e "│ ${YELLOW}Device Type:${NC}   Workstation"
+{% else %}
+echo -e "│ ${YELLOW}Device Type:${NC}   General System"
+{% endif %}
+echo -e "${BOLD}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+{% endif %}
+
+# Services Status (if applicable)
+{% if ansible_system == 'Linux' %}
+echo -e "\n${BOLD}${GREEN}⚙️  SERVICE STATUS${NC}"
+echo -e "${BOLD}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+
+# Check for common services
+services=("ctrld" "docker" "nginx" "apache2" "httpd" "fail2ban")
+for service in "${services[@]}"; do
+    if systemctl list-unit-files --type=service | grep -q "^$service.service"; then
+        status=$(systemctl is-active $service 2>/dev/null)
+        if [ "$status" = "active" ]; then
+            echo -e "│ ${GREEN}●${NC} $service: ${GREEN}running${NC}"
+        elif [ "$status" = "inactive" ]; then
+            echo -e "│ ${YELLOW}○${NC} $service: ${YELLOW}stopped${NC}"
+        else
+            echo -e "│ ${RED}●${NC} $service: ${RED}failed${NC}"
+        fi
+    fi
+done
+echo -e "${BOLD}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+{% endif %}
+
+# Disk Usage Warning
+{% if ansible_system == 'Linux' %}
+DISK_USAGE=$(df / | awk 'NR==2 {gsub(/%/, "", $5); print $5}')
+if [ "$DISK_USAGE" -gt 85 ]; then
+    echo -e "\n${BOLD}${RED}⚠️  WARNING: Disk usage is at ${DISK_USAGE}% - Consider cleaning up${NC}"
+fi
+
+# Memory Usage Warning
+MEM_USAGE=$(free | awk 'NR==2 {printf "%.0f", ($3/$2)*100}')
+if [ "$MEM_USAGE" -gt 85 ]; then
+    echo -e "${BOLD}${RED}⚠️  WARNING: Memory usage is at ${MEM_USAGE}% - System may be under stress${NC}"
+fi
+{% endif %}
+
+# Management Information
+echo -e "\n${BOLD}${CYAN}🔧 MANAGEMENT${NC}"
+echo -e "${BOLD}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "│ ${YELLOW}Managed by:${NC}   Ansible (Gutter Bonez)"
+echo -e "│ ${YELLOW}Last Update:${NC}  {{ ansible_date_time.date }}"
+{% if ansible_managed is defined %}
+echo -e "│ ${YELLOW}Config:${NC}       {{ ansible_managed }}"
+{% endif %}
+echo -e "│ ${YELLOW}Support:${NC}      Check logs with: journalctl -xe"
+echo -e "${BOLD}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+
+# Footer
+echo -e "\n${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BOLD}${WHITE}                   Nowhere to go but up. Always lots left todo.                ${NC}"
+echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+{% if motd_custom_message is defined %}
+echo -e "\n${BOLD}${PURPLE}📢 SYSTEM MESSAGE:${NC}"
+echo -e "{{ motd_custom_message }}"
+{% endif %}
+
+echo ""

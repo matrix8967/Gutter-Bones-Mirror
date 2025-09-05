@@ -1,0 +1,84 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=15
+
+USE_PROCD=1
+PROG="{{ ctrld_binary_path }}"
+CONFIG="{{ ctrld_config_file }}"
+
+start_service() {
+    procd_open_instance
+    procd_set_param command "$PROG" run --config "$CONFIG"
+    procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_set_param user root
+    procd_set_param pidfile /var/run/ctrld.pid
+
+    # Environment variables
+    procd_set_param env CTRLD_CONFIG_PATH="{{ ctrld_config_dir }}"
+    procd_set_param env CTRLD_LOG_LEVEL="{{ ctrld_log_level | default('info') }}"
+    {% if resolver_id is defined %}
+    procd_set_param env CTRLD_RESOLVER_ID="{{ resolver_id }}"
+    {% endif %}
+
+    procd_close_instance
+}
+
+stop_service() {
+    local pid=$(cat /var/run/ctrld.pid 2>/dev/null)
+    if [ -n "$pid" ]; then
+        kill -TERM "$pid" 2>/dev/null
+        sleep 2
+        if kill -0 "$pid" 2>/dev/null; then
+            kill -KILL "$pid" 2>/dev/null
+        fi
+    fi
+    rm -f /var/run/ctrld.pid
+}
+
+reload_service() {
+    local pid=$(cat /var/run/ctrld.pid 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        kill -HUP "$pid"
+    else
+        restart
+    fi
+}
+
+service_triggers() {
+    procd_add_reload_trigger "ctrld"
+}
+
+validate_config() {
+    if [ ! -f "$CONFIG" ]; then
+        echo "Configuration file not found: $CONFIG"
+        return 1
+    fi
+
+    if [ ! -x "$PROG" ]; then
+        echo "ctrld binary not found or not executable: $PROG"
+        return 1
+    fi
+
+    # Test configuration
+    "$PROG" run --config "$CONFIG" --test >/dev/null 2>&1
+    return $?
+}
+
+boot() {
+    # Wait for network to be ready
+    local timeout=30
+    local count=0
+
+    while [ $count -lt $timeout ]; do
+        if ping -c1 8.8.8.8 >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+
+    start
+}

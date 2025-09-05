@@ -1,0 +1,492 @@
+---
+# DNS Security Testing Playbook for Gutter Bonez Infrastructure
+# Comprehensive DNS security validation, threat detection, and performance analysis
+# Designed for QA testing across diverse network configurations
+
+- name: "🔍 DNS Security Testing Framework"
+  hosts: all
+  gather_facts: yes
+  become: yes
+  vars:
+    # Test configuration
+    dns_test_session: "dns-security-{{ ansible_date_time.epoch }}"
+    dns_test_environment: "{{ test_environment | default('development') }}"
+
+    # Test scope - can be overridden with --extra-vars
+    dns_security_tests: "{{ dns_test_types | default(['baseline']) }}"
+
+    # Fail on critical findings
+    dns_security_fail_on_critical: "{{ fail_on_critical | default(false) }}"
+
+    # Control D integration
+    dns_controld_integration: "{{ controld_integration | default(false) }}"
+
+    # Custom malicious domains for testing
+    dns_malicious_test_domains:
+      - "malware.testcategory.com"
+      - "phishing.testcategory.com"
+      - "ads.testcategory.com"
+      - "tracking.testcategory.com"
+      - "cryptomining.testcategory.com"
+      - "gambling.testcategory.com"
+      - "adult.testcategory.com"
+
+    # Performance test configuration
+    dns_performance_iterations: 5
+    dns_performance_concurrent_queries: 3
+
+  pre_tasks:
+    - name: Display DNS security testing banner
+      debug:
+        msg:
+          - "🛡️  Starting DNS Security Testing Framework"
+          - "=========================================="
+          - "Session ID: {{ dns_test_session }}"
+          - "Target Host: {{ inventory_hostname }}"
+          - "Environment: {{ dns_test_environment }}"
+          - "Test Types: {{ dns_security_tests | default(['baseline']) | join(', ') }}"
+          - "Control D Integration: {{ 'Enabled' if dns_controld_integration else 'Disabled' }}"
+          - "Fail on Critical: {{ 'Yes' if dns_security_fail_on_critical else 'No' }}"
+          - "=========================================="
+
+    - name: Create DNS security test results directory
+      file:
+        path: "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Validate DNS testing prerequisites
+      block:
+        - name: Check for dig command availability
+          command: which dig
+          register: dig_check
+          changed_when: false
+          failed_when: false
+
+        - name: Check for curl command availability
+          command: which curl
+          register: curl_check
+          changed_when: false
+          failed_when: false
+
+        - name: Check for openssl command availability
+          command: which openssl
+          register: openssl_check
+          changed_when: false
+          failed_when: false
+
+        - name: Install missing DNS testing tools
+          package:
+            name:
+              - "{{ 'bind-utils' if ansible_os_family == 'RedHat' else 'dnsutils' }}"
+              - curl
+              - openssl
+            state: present
+          when:
+            - dig_check.rc != 0 or curl_check.rc != 0 or openssl_check.rc != 0
+            - ansible_system == 'Linux'
+
+        - name: Verify ctrld installation (if Control D integration enabled)
+          stat:
+            path: "{{ '/usr/local/bin/ctrld' if ansible_system == 'Darwin' else '/usr/bin/ctrld' }}"
+          register: ctrld_binary_check
+          when: dns_controld_integration
+
+    - name: Record test environment information
+      set_fact:
+        dns_test_environment_info:
+          hostname: "{{ inventory_hostname }}"
+          os_family: "{{ ansible_os_family }}"
+          distribution: "{{ ansible_distribution }}"
+          version: "{{ ansible_distribution_version }}"
+          architecture: "{{ ansible_architecture }}"
+          kernel: "{{ ansible_kernel }}"
+          primary_ip: "{{ ansible_default_ipv4.address | default('unknown') }}"
+          gateway: "{{ ansible_default_ipv4.gateway | default('unknown') }}"
+          nameservers: "{{ ansible_dns.nameservers | default(['unknown']) }}"
+          test_session: "{{ dns_test_session }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+
+  tasks:
+    # ========================================
+    # Core DNS Security Testing
+    # ========================================
+    - name: "🔍 Execute DNS Security Testing Framework"
+      include_role:
+        name: dns_security
+      vars:
+        dns_security_session_id: "{{ dns_test_session }}"
+        dns_malicious_domains: "{{ dns_malicious_test_domains }}"
+        dns_security_fail_on_critical: "{{ dns_security_fail_on_critical }}"
+        dns_controld_integration: "{{ dns_controld_integration }}"
+
+    # ========================================
+    # Advanced DNS Security Tests
+    # ========================================
+    - name: "🔬 Advanced DNS Security Analysis"
+      block:
+        - name: Test DNS-over-HTTPS (DoH) security
+          uri:
+            url: "{{ item }}"
+            method: GET
+            headers:
+              accept: "application/dns-json"
+            timeout: 10
+            return_content: yes
+          register: doh_security_test
+          failed_when: false
+          loop:
+            - "https://cloudflare-dns.com/dns-query?name=example.com&type=A"
+            - "https://dns.google/dns-query?name=example.com&type=A"
+            - "https://security.cloudflare-dns.com/dns-query?name=malware.testcategory.com&type=A"
+          when: "'secure_dns' in dns_security_tests"
+
+        - name: Test DNSSEC validation
+          shell: |
+            # Test DNSSEC validation with known DNSSEC-signed domains
+            dnssec_domains=("cloudflare.com" "google.com" "ietf.org")
+
+            echo "domain,dnssec_status,validation_result"
+            for domain in "${dnssec_domains[@]}"; do
+              if dig +dnssec +short @1.1.1.1 $domain A | grep -q "RRSIG"; then
+                echo "$domain,signed,valid"
+              else
+                echo "$domain,unsigned_or_invalid,unknown"
+              fi
+            done
+          register: dnssec_validation_test
+          changed_when: false
+          failed_when: false
+          when:
+            - "'dnssec' in dns_security_tests"
+            - ansible_system != 'Windows'
+
+        - name: Test DNS rebinding protection
+          shell: |
+            # Test for DNS rebinding protection using known test domains
+            rebinding_domains=("rebind.network" "rebind.it")
+
+            echo "domain,local_resolution,external_resolution,protection_status"
+            for domain in "${rebinding_domains[@]}"; do
+              local_result=$(dig @127.0.0.1 +short +time=2 $domain A 2>/dev/null || echo "TIMEOUT")
+              external_result=$(dig @8.8.8.8 +short +time=2 $domain A 2>/dev/null || echo "TIMEOUT")
+
+              if [[ "$local_result" != "$external_result" ]] || [[ "$local_result" == "TIMEOUT" ]]; then
+                echo "$domain,$local_result,$external_result,protected"
+              else
+                echo "$domain,$local_result,$external_result,vulnerable"
+              fi
+            done
+          register: dns_rebinding_test
+          changed_when: false
+          failed_when: false
+          when:
+            - "'rebinding_protection' in dns_security_tests"
+            - ansible_system != 'Windows'
+
+    # ========================================
+    # Network Environment Analysis
+    # ========================================
+    - name: "🌐 Network Environment Security Analysis"
+      block:
+        - name: Detect network environment type
+          shell: |
+            # Attempt to identify network environment based on various indicators
+
+            # Check for common corporate/captive portal indicators
+            if curl -s --max-time 5 "http://detectportal.firefox.com/canonical.html" | grep -q "success"; then
+              echo "environment_type=open_internet"
+            elif curl -s --max-time 5 "http://www.msftconnecttest.com/connecttest.txt" | grep -q "Microsoft"; then
+              echo "environment_type=open_internet"
+            else
+              echo "environment_type=restricted_or_captive"
+            fi
+
+            # Check for common enterprise DNS servers
+            gateway="{{ ansible_default_ipv4.gateway | default('') }}"
+            if [[ -n "$gateway" ]]; then
+              if [[ "$gateway" =~ ^10\. ]] || [[ "$gateway" =~ ^172\.(1[6-9]|2[0-9]|3[01])\. ]] || [[ "$gateway" =~ ^192\.168\. ]]; then
+                echo "network_scope=private"
+              else
+                echo "network_scope=public"
+              fi
+            fi
+
+            # Check for common proxy/filtering indicators
+            if dig @{{ ansible_default_ipv4.gateway | default('8.8.8.8') }} +short proxy.example.com A 2>/dev/null | grep -q "127.0.0.1\|0.0.0.0"; then
+              echo "filtering_detected=true"
+            else
+              echo "filtering_detected=false"
+            fi
+          register: network_environment_analysis
+          changed_when: false
+          failed_when: false
+          when: ansible_system != 'Windows'
+
+        - name: Test for transparent proxy detection
+          shell: |
+            # Test for transparent HTTP proxy
+            original_ip=$(dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null || echo "unknown")
+
+            # Make HTTP request and check if headers indicate proxy
+            headers=$(curl -s --max-time 10 -I "http://httpbin.org/headers" 2>/dev/null || echo "")
+
+            if echo "$headers" | grep -qi "via:\|x-forwarded\|proxy"; then
+              echo "transparent_proxy=detected"
+            else
+              echo "transparent_proxy=not_detected"
+            fi
+
+            echo "external_ip=$original_ip"
+          register: transparent_proxy_test
+          changed_when: false
+          failed_when: false
+          when: ansible_system != 'Windows'
+
+    # ========================================
+    # Control D Specific Testing
+    # ========================================
+    - name: "🎛️ Control D Integration Testing"
+      block:
+        - name: Comprehensive Control D validation
+          uri:
+            url: "https://verify.controld.com"
+            method: GET
+            timeout: 15
+            return_content: yes
+          register: controld_comprehensive_test
+          failed_when: false
+
+        - name: Parse Control D verification details
+          set_fact:
+            controld_verification:
+              accessible: "{{ controld_comprehensive_test.status == 200 }}"
+              response_time: "{{ controld_comprehensive_test.elapsed | default(0) }}"
+              dns_server: "{{ controld_comprehensive_test.content | regex_search('DNS Server: ([0-9.]+)', '\\1') | first | default('unknown') }}"
+              location: "{{ controld_comprehensive_test.content | regex_search('Location: ([^\\n\\r]+)', '\\1') | first | default('unknown') }}"
+              resolver_ip: "{{ controld_comprehensive_test.content | regex_search('Resolver IP: ([0-9.]+)', '\\1') | first | default('unknown') }}"
+              filtering_status: "{{ controld_comprehensive_test.content | regex_search('Filtering: ([^\\n\\r]+)', '\\1') | first | default('unknown') }}"
+          when:
+            - dns_controld_integration
+            - controld_comprehensive_test is defined
+
+        - name: Test Control D policy enforcement
+          shell: |
+            # Test various Control D policy categories
+            test_domains=(
+              "ads.testcategory.com:ads"
+              "malware.testcategory.com:malware"
+              "phishing.testcategory.com:phishing"
+              "tracking.testcategory.com:tracking"
+            )
+
+            echo "domain,category,status,response"
+            for test_case in "${test_domains[@]}"; do
+              domain=$(echo $test_case | cut -d: -f1)
+              category=$(echo $test_case | cut -d: -f2)
+
+              response=$(dig @127.0.0.1 +short +time=3 $domain A 2>/dev/null)
+
+              if [[ -z "$response" ]]; then
+                echo "$domain,$category,blocked,NXDOMAIN"
+              elif [[ "$response" =~ ^0\.0\.0\.0$ ]] || [[ "$response" =~ ^127\.0\.0\.1$ ]]; then
+                echo "$domain,$category,blocked,$response"
+              else
+                echo "$domain,$category,allowed,$response"
+              fi
+            done
+          register: controld_policy_test
+          changed_when: false
+          failed_when: false
+          when:
+            - dns_controld_integration
+            - ansible_system != 'Windows'
+
+        - name: Monitor ctrld service health
+          shell: |
+            if command -v systemctl >/dev/null 2>&1; then
+              if systemctl is-active ctrld >/dev/null 2>&1; then
+                echo "service_status=active"
+                echo "uptime_seconds=$(systemctl show ctrld -p ActiveEnterTimestampMonotonic --value | awk '{print int(systime() - $1/1000000)}')"
+                echo "memory_usage=$(systemctl show ctrld -p MemoryCurrent --value)"
+                echo "restart_count=$(systemctl show ctrld -p NRestarts --value)"
+                echo "last_restart=$(systemctl show ctrld -p ActiveEnterTimestamp --value)"
+              else
+                echo "service_status=inactive"
+              fi
+            else
+              echo "service_status=unknown"
+            fi
+
+            # Check ctrld configuration
+            if [[ -f /etc/ctrld/ctrld.toml ]]; then
+              echo "config_exists=true"
+              echo "config_size=$(stat -f%z /etc/ctrld/ctrld.toml 2>/dev/null || stat -c%s /etc/ctrld/ctrld.toml)"
+              echo "config_modified=$(stat -f%m /etc/ctrld/ctrld.toml 2>/dev/null || stat -c%Y /etc/ctrld/ctrld.toml)"
+            else
+              echo "config_exists=false"
+            fi
+
+            # Check for ctrld process
+            if pgrep -f ctrld >/dev/null; then
+              echo "process_running=true"
+              echo "process_count=$(pgrep -c -f ctrld)"
+            else
+              echo "process_running=false"
+            fi
+          register: ctrld_health_monitor
+          changed_when: false
+          failed_when: false
+          when:
+            - dns_controld_integration
+            - ansible_system == 'Linux'
+      when: dns_controld_integration
+
+  post_tasks:
+    # ========================================
+    # Results Compilation and Reporting
+    # ========================================
+    - name: "📊 Compile DNS Security Test Results"
+      set_fact:
+        dns_security_final_report:
+          metadata:
+            session_id: "{{ dns_test_session }}"
+            hostname: "{{ inventory_hostname }}"
+            timestamp: "{{ ansible_date_time.iso8601 }}"
+            environment: "{{ dns_test_environment }}"
+            test_duration: "{{ ((ansible_date_time.epoch | int) - (dns_test_session.split('-')[-1] | int)) }}"
+
+          environment_info: "{{ dns_test_environment_info }}"
+
+          security_summary: "{{ dns_security_summary | default({}) }}"
+
+          advanced_tests:
+            dnssec_validation: "{{ dnssec_validation_test.stdout_lines | default([]) }}"
+            dns_rebinding: "{{ dns_rebinding_test.stdout_lines | default([]) }}"
+            doh_security: "{{ doh_security_test.results | default([]) }}"
+
+          network_analysis:
+            environment_detection: "{{ network_environment_analysis.stdout_lines | default([]) }}"
+            transparent_proxy: "{{ transparent_proxy_test.stdout_lines | default([]) }}"
+
+          controld_integration:
+            verification: "{{ controld_verification | default({}) }}"
+            policy_enforcement: "{{ controld_policy_test.stdout_lines | default([]) }}"
+            service_health: "{{ ctrld_health_monitor.stdout_lines | default([]) }}"
+
+    - name: "📄 Generate comprehensive DNS security report"
+      template:
+        src: dns_security_comprehensive_report.j2
+        dest: "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}/comprehensive_report.html"
+        mode: "0644"
+      delegate_to: localhost
+
+    - name: "📋 Export results to JSON"
+      copy:
+        content: "{{ dns_security_final_report | to_nice_json(indent=2) }}"
+        dest: "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}/results.json"
+        mode: "0644"
+      delegate_to: localhost
+
+    - name: "📈 Generate CI/CD artifacts"
+      block:
+        - name: Create GitLab CI report
+          copy:
+            content: |
+              DNS_SECURITY_TEST_SESSION={{ dns_test_session }}
+              DNS_SECURITY_SUCCESS_RATE={{ dns_security_summary.baseline_health.success_rate | default(0) }}
+              DNS_SECURITY_THREAT_BLOCKING={{ dns_security_summary.security_findings.malicious_blocking.effectiveness | default(0) }}
+              DNS_SECURITY_AVG_RESPONSE_TIME={{ dns_security_summary.performance_metrics.average_response_time | default(0) }}
+              DNS_SECURITY_HTTPS_INTERCEPTION={{ dns_security_summary.security_findings.https_security.interception_detected | default(false) }}
+              DNS_SECURITY_CONTROLD_ACTIVE={{ dns_security_summary.controld_integration.ctrld_active | default(false) }}
+            dest: "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}/ci_variables.env"
+            mode: "0644"
+          delegate_to: localhost
+
+        - name: Create test summary for pipeline
+          copy:
+            content: |
+              {
+                "session_id": "{{ dns_test_session }}",
+                "hostname": "{{ inventory_hostname }}",
+                "timestamp": "{{ ansible_date_time.iso8601 }}",
+                "tests": {
+                  "baseline_health": {{ dns_security_summary.baseline_health.success_rate | default(0) }},
+                  "threat_blocking": {{ dns_security_summary.security_findings.malicious_blocking.effectiveness | default(0) }},
+                  "performance": {{ dns_security_summary.performance_metrics.average_response_time | default(0) }},
+                  "security_issues": {{ dns_security_summary.security_findings.https_security.interception_detected | default(false) | lower }}
+                },
+                "status": "{{ 'PASS' if (dns_security_summary.baseline_health.success_rate | default(0)) >= 90 and (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(0)) >= 80 else 'FAIL' }}",
+                "artifacts": [
+                  "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}/comprehensive_report.html",
+                  "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}/results.json"
+                ]
+              }
+            dest: "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}/test_summary.json"
+            mode: "0644"
+          delegate_to: localhost
+
+    - name: "🚨 DNS Security Test Summary"
+      debug:
+        msg:
+          - "🛡️  DNS Security Testing Complete!"
+          - "============================================"
+          - "Session ID: {{ dns_test_session }}"
+          - "Target Host: {{ inventory_hostname }}"
+          - "Test Duration: {{ ((ansible_date_time.epoch | int) - (dns_test_session.split('-')[-1] | int)) }} seconds"
+          - "============================================"
+          - "📊 RESULTS SUMMARY:"
+          - "  🎯 DNS Success Rate: {{ dns_security_summary.baseline_health.success_rate | default('N/A') }}%"
+          - "  🛡️  Threat Blocking: {{ dns_security_summary.security_findings.malicious_blocking.effectiveness | default('N/A') }}%"
+          - "  ⚡ Avg Response Time: {{ dns_security_summary.performance_metrics.average_response_time | default('N/A') }}ms"
+          - "  🔒 HTTPS Interception: {{ 'DETECTED' if dns_security_summary.security_findings.https_security.interception_detected | default(false) else 'NOT DETECTED' }}"
+          - "  🎛️  Control D Status: {{ 'ACTIVE' if dns_security_summary.controld_integration.ctrld_active | default(false) else 'INACTIVE' }}"
+          - "============================================"
+          - "📄 Full Report: /tmp/gutter_bonez_dns_security/{{ dns_test_session }}/comprehensive_report.html"
+          - "📋 JSON Results: /tmp/gutter_bonez_dns_security/{{ dns_test_session }}/results.json"
+
+    # ========================================
+    # Critical Findings Alert
+    # ========================================
+    - name: "🚨 CRITICAL DNS Security Alert"
+      fail:
+        msg: |
+          ⚠️  CRITICAL DNS SECURITY ISSUES DETECTED!
+
+          The following critical security issues were found:
+
+          {% if (dns_security_summary.baseline_health.success_rate | default(100)) < 90 %}
+          • DNS Reliability Issue: {{ dns_security_summary.baseline_health.success_rate }}% success rate (< 90%)
+          {% endif %}
+
+          {% if (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(100)) < 80 %}
+          • Poor Threat Protection: {{ dns_security_summary.security_findings.malicious_blocking.effectiveness }}% blocking rate (< 80%)
+          {% endif %}
+
+          {% if dns_security_summary.security_findings.https_security.interception_detected | default(false) %}
+          • HTTPS Interception: Potential man-in-the-middle attack detected
+          {% endif %}
+
+          {% if dns_security_summary.security_findings.dns_poisoning.potential_incidents | default(0) > 0 %}
+          • DNS Poisoning: {{ dns_security_summary.security_findings.dns_poisoning.potential_incidents }} potential incidents
+          {% endif %}
+
+          📊 Review the full report for detailed analysis and remediation steps:
+          /tmp/gutter_bonez_dns_security/{{ dns_test_session }}/comprehensive_report.html
+      when:
+        - dns_security_fail_on_critical
+        - >
+          (dns_security_summary.baseline_health.success_rate | default(100)) < 90 or
+          (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(100)) < 80 or
+          dns_security_summary.security_findings.https_security.interception_detected | default(false) or
+          (dns_security_summary.security_findings.dns_poisoning.potential_incidents | default(0)) > 0
+
+  handlers:
+    - name: cleanup_dns_test_artifacts
+      file:
+        path: "/tmp/gutter_bonez_dns_security/old_*"
+        state: absent
+      delegate_to: localhost
+      listen: "cleanup dns artifacts"

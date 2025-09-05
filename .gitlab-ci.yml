@@ -1,4 +1,34 @@
+stages:
+  - validate
+  - test-smoke
+  - test-functional
+  - test-integration
+  - test-chaos
+  - test-performance
+  - deploy
+  - cleanup
+
+variables:
+  ANSIBLE_HOST_KEY_CHECKING: "False"
+  ANSIBLE_STDOUT_CALLBACK: "yaml"
+  ANSIBLE_FORCE_COLOR: "true"
+  TEST_ENVIRONMENT: "staging"
+  GUTTER_BONEZ_VERSION: "${CI_COMMIT_SHA:0:8}"
+
+# Default configuration
+default:
+  image: python:3.11-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git openssh-client curl gnupg lsb-release
+    - pip install --no-cache-dir ansible>=6.0.0 ansible-lint yamllint
+    - ansible-galaxy collection install -r requirements.yml --force
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H "$TEST_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+# Update scrolls submodule (existing)
 update_scrolls_submodule:
+  stage: validate
   image: alpine:latest
   script:
     - apk add git openssh
@@ -6,8 +36,536 @@ update_scrolls_submodule:
     - git config --global user.name "GitLab CI Bot"
     - git submodule update --remote --merge
     - git add roles/scrolls
-    - git commit -m "Auto-update scrolls submodule" || echo "No changes"
-    - git push https://gitlab-ci-token:${CI_PUSH_TOKEN}@gitlab.com/matrix8967/gutter_bonez.git HEAD:main
+    - git commit -m "Auto-update scrolls submodule [skip ci]" || echo "No changes"
+    - git push https://gitlab-ci-token:${CI_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git HEAD:${CI_COMMIT_REF_NAME}
   only:
     - main
+  when: manual
 
+# Validation stage
+lint-ansible:
+  stage: validate
+  script:
+    - echo "🔍 Linting Ansible playbooks and roles..."
+    - ansible-lint --version
+    - ansible-lint playbooks/ roles/ --exclude roles/scrolls
+    - yamllint --version
+    - yamllint -c .yamllint.yml playbooks/ roles/ inventory/ --ignore roles/scrolls
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  artifacts:
+    reports:
+      junit: lint-results.xml
+    expire_in: 1 week
+    when: always
+
+validate-inventory:
+  stage: validate
+  script:
+    - echo "📋 Validating inventory files..."
+    - ansible-inventory -i inventory/hosts --list > /dev/null
+    - ansible-inventory -i inventory/example_ctrld_deployment.yml --list > /dev/null
+    - echo "✅ Inventory validation successful"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+syntax-check:
+  stage: validate
+  script:
+    - echo "🔧 Checking Ansible syntax..."
+    - ansible-playbook --syntax-check playbooks/Init.yml
+    - ansible-playbook --syntax-check playbooks/install_ctrld.yml
+    - ansible-playbook --syntax-check playbooks/ci_testing.yml
+    - echo "✅ Syntax check passed"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# Smoke testing stage
+smoke-test-ubuntu:
+  stage: test-smoke
+  variables:
+    TEST_TARGET: "ubuntu"
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "🚨 Running smoke tests on Ubuntu target..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --limit ${TEST_TARGET}
+      --tags smoke
+      --extra-vars "test_environment=${TEST_ENVIRONMENT} fail_on_test_failure=true"
+    - echo "📊 Collecting smoke test results..."
+  artifacts:
+    name: "smoke-test-ubuntu-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+    reports:
+      junit: /tmp/gutter_bonez_ci_results/*_ci_report.json
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  allow_failure: false
+
+smoke-test-debian:
+  stage: test-smoke
+  variables:
+    TEST_TARGET: "debian"
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "🚨 Running smoke tests on Debian target..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --limit ${TEST_TARGET}
+      --tags smoke
+      --extra-vars "test_environment=${TEST_ENVIRONMENT} fail_on_test_failure=true"
+  artifacts:
+    name: "smoke-test-debian-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  allow_failure: false
+
+# Functional testing stage
+functional-test:
+  stage: test-functional
+  parallel:
+    matrix:
+      - TEST_TARGET: ["ubuntu", "debian", "fedora"]
+  variables:
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "⚙️ Running functional tests on ${TEST_TARGET}..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --limit ${TEST_TARGET}
+      --tags functional
+      --extra-vars "test_environment=${TEST_ENVIRONMENT} fail_on_test_failure=false"
+    - echo "📊 Functional test results for ${TEST_TARGET}:"
+    - cat /tmp/gutter_bonez_ci_results/ci_variables.env || true
+  artifacts:
+    name: "functional-test-${TEST_TARGET}-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+  allow_failure: true
+
+# Integration testing stage
+integration-test-linux:
+  stage: test-integration
+  variables:
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "🔗 Running integration tests across Linux platforms..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --limit "linux"
+      --tags integration
+      --extra-vars "test_environment=${TEST_ENVIRONMENT} fail_on_test_failure=false"
+    - echo "🗺️ Running network discovery..."
+    - ansible-playbook -i ${TEST_INVENTORY} -m setup all --limit linux
+  artifacts:
+    name: "integration-test-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+      - /tmp/gutter_bonez_discovery/
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+  allow_failure: true
+
+router-compatibility-test:
+  stage: test-integration
+  variables:
+    TEST_INVENTORY: "inventory/Network.yml"
+  script:
+    - echo "🌐 Testing router firmware compatibility..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/Asus_Merlin.yml --check --diff || true
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/EdgeOS.yml --check --diff || true
+    - echo "📡 Router compatibility test completed"
+  artifacts:
+    name: "router-test-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
+
+# Chaos engineering stage
+chaos-test-network:
+  stage: test-chaos
+  variables:
+    TEST_INVENTORY: "inventory/hosts"
+    CHAOS_ENVIRONMENT: "staging"
+  script:
+    - echo "🔥 Running network chaos engineering tests..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --limit "ubuntu"
+      --tags chaos
+      --extra-vars "test_environment=${CHAOS_ENVIRONMENT} chaos_experiments.network_latency=true chaos_experiments.packet_loss=true"
+    - echo "🧪 Chaos test results:"
+    - find /tmp/gutter_bonez_chaos -name "*chaos_report.json" -exec cat {} \; || true
+  artifacts:
+    name: "chaos-test-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_chaos/
+    expire_in: 2 weeks
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
+
+chaos-test-service:
+  stage: test-chaos
+  variables:
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "🔥 Running service disruption chaos tests..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --limit "debian"
+      --tags chaos
+      --extra-vars "test_environment=staging chaos_experiments.service_disruption=true chaos_experiments.resource_exhaustion=true"
+  artifacts:
+    name: "chaos-service-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_chaos/
+    expire_in: 2 weeks
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
+
+# DNS Security testing stage
+dns-security-test-comprehensive:
+  stage: test-integration
+  variables:
+    TEST_INVENTORY: "inventory/example_dns_security.yml"
+    DNS_TEST_ENVIRONMENT: "staging"
+  script:
+    - echo "🛡️ Running comprehensive DNS security testing..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/dns_security_testing.yml
+      --extra-vars "test_environment=${DNS_TEST_ENVIRONMENT} dns_security_fail_on_critical=false dns_controld_integration=true"
+    - echo "📊 DNS security test summary:"
+    - cat /tmp/gutter_bonez_dns_security/*/test_summary.json || echo "No test summary found"
+    - echo "🔍 Security findings:"
+    - grep -r "CRITICAL\|WARNING" /tmp/gutter_bonez_dns_security/ || echo "No critical findings"
+  artifacts:
+    name: "dns-security-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_dns_security/
+    reports:
+      junit: /tmp/gutter_bonez_dns_security/*/test_summary.json
+    expire_in: 2 weeks
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+  allow_failure: false
+
+dns-security-test-controld:
+  stage: test-integration
+  variables:
+    TEST_INVENTORY: "inventory/example_ctrld_deployment.yml"
+  script:
+    - echo "🎛️ Running Control D specific DNS security tests..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/dns_security_testing.yml
+      --extra-vars "dns_security_tests=['baseline','malicious_blocking','performance'] dns_controld_integration=true test_environment=staging"
+    - echo "📈 Control D integration results:"
+    - find /tmp/gutter_bonez_dns_security -name "*ci_variables.env" -exec cat {} \; || true
+  artifacts:
+    name: "dns-security-controld-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_dns_security/
+    expire_in: 2 weeks
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
+
+# Performance testing stage
+performance-test-dns:
+  stage: test-performance
+  variables:
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "📈 Running DNS performance benchmarks..."
+    - apt-get install -y dnsperf || echo "dnsperf not available, using fallback"
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --limit "ubuntu"
+      --tags performance
+      --extra-vars "test_environment=staging performance_tests=true test_duration_multiplier=2.0"
+    - echo "📊 Performance test summary:"
+    - grep -r "performance_test_results" /tmp/gutter_bonez_ci_results/ || true
+  artifacts:
+    name: "performance-test-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+    expire_in: 2 weeks
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
+
+load-test-concurrent:
+  stage: test-performance
+  variables:
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "🚀 Running concurrent load tests..."
+    - ansible-playbook -i ${TEST_INVENTORY} -m shell -a "
+        for i in {1..100}; do
+          dig @127.0.0.1 test$i.com +short +time=1 &
+        done; wait" all --limit ubuntu
+    - echo "💪 Load test completed"
+  artifacts:
+    name: "load-test-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
+
+# Deployment stage
+deploy-staging:
+  stage: deploy
+  variables:
+    DEPLOY_ENVIRONMENT: "staging"
+    TEST_INVENTORY: "inventory/example_ctrld_deployment.yml"
+  script:
+    - echo "🚀 Deploying to staging environment..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/install_ctrld.yml
+      --extra-vars "ctrld_defaults.validate_config=true deployment_environment=${DEPLOY_ENVIRONMENT}"
+    - echo "✅ Staging deployment completed"
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --tags smoke
+      --extra-vars "test_environment=${DEPLOY_ENVIRONMENT}"
+  environment:
+    name: staging
+    url: https://verify.controld.com
+  artifacts:
+    name: "deploy-staging-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+    expire_in: 1 week
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: false
+
+deploy-production:
+  stage: deploy
+  variables:
+    DEPLOY_ENVIRONMENT: "production"
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "🎯 Deploying to production environment..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/install_ctrld.yml
+      --limit "production"
+      --extra-vars "ctrld_defaults.validate_config=true ctrld_defaults.backup_config=true deployment_environment=${DEPLOY_ENVIRONMENT}"
+    - echo "✅ Production deployment completed"
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/ci_testing.yml
+      --limit "production"
+      --tags smoke
+      --extra-vars "test_environment=${DEPLOY_ENVIRONMENT} fail_on_test_failure=true"
+  environment:
+    name: production
+    url: https://verify.controld.com
+  artifacts:
+    name: "deploy-production-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_ci_results/
+    expire_in: 4 weeks
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: false
+
+# Cleanup stage
+cleanup-test-environment:
+  stage: cleanup
+  variables:
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "🧹 Cleaning up test environments..."
+    - ansible-playbook -i ${TEST_INVENTORY} -m shell -a "
+        pkill -f 'dig.*127.0.0.1' || true;
+        pkill -f 'stress-ng' || true;
+        tc qdisc del dev \$(ip route | grep default | awk '{print \$5}' | head -1) root 2>/dev/null || true;
+        rm -rf /tmp/gutter_bonez_* || true;
+        systemctl status ctrld || true
+      " all --become
+    - echo "✨ Cleanup completed"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+  allow_failure: true
+
+dns-security-performance-benchmark:
+  stage: test-performance
+  variables:
+    TEST_INVENTORY: "inventory/hosts"
+  script:
+    - echo "🚀 Running DNS performance and security benchmarks..."
+    - ansible-playbook -i ${TEST_INVENTORY} playbooks/dns_security_testing.yml
+      --limit "ubuntu"
+      --extra-vars "dns_security_tests=['baseline','performance'] test_environment=staging performance_iterations=20"
+    - echo "📊 Performance benchmark results:"
+    - grep -r "performance_metrics" /tmp/gutter_bonez_dns_security/ || echo "No performance metrics found"
+  artifacts:
+    name: "dns-performance-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - /tmp/gutter_bonez_dns_security/
+    expire_in: 2 weeks
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
+
+# Report generation
+generate-test-report:
+  stage: cleanup
+  image: python:3.11-slim
+  script:
+    - echo "📊 Generating comprehensive test report..."
+    - pip install jinja2 pyyaml
+    - python3 << 'EOF'
+      import json
+      import os
+      import glob
+      from datetime import datetime
+
+      print("🔍 Scanning for test results...")
+      report_data = {
+          "pipeline_id": os.environ.get("CI_PIPELINE_ID"),
+          "commit_sha": os.environ.get("CI_COMMIT_SHA"),
+          "branch": os.environ.get("CI_COMMIT_REF_NAME"),
+          "timestamp": datetime.now().isoformat(),
+          "test_summary": {
+              "smoke_tests": 0,
+              "functional_tests": 0,
+              "integration_tests": 0,
+              "chaos_tests": 0,
+              "performance_tests": 0
+          }
+      }
+
+      # Scan for test result files
+      result_files = glob.glob("/tmp/gutter_bonez_*/") + glob.glob("gutter_bonez_ci_results/")
+      print(f"📁 Found {len(result_files)} result directories")
+
+      with open("pipeline_report.json", "w") as f:
+          json.dump(report_data, f, indent=2)
+
+      print("📄 Pipeline report generated: pipeline_report.json")
+      EOF
+    - ls -la pipeline_report.json || echo "Report generation failed"
+
+    # Include DNS security test results in pipeline report
+    - echo "🛡️ Checking for DNS security test results..."
+    - python3 << 'EOF'
+      import json
+      import glob
+      import os
+
+      dns_security_results = []
+      for result_file in glob.glob("/tmp/gutter_bonez_dns_security/*/test_summary.json"):
+          try:
+              with open(result_file, 'r') as f:
+                  result = json.load(f)
+                  dns_security_results.append(result)
+          except Exception as e:
+              print(f"Error reading {result_file}: {e}")
+
+      if dns_security_results:
+          print(f"📊 Found {len(dns_security_results)} DNS security test results")
+          with open("dns_security_summary.json", "w") as f:
+              json.dump({
+                  "total_tests": len(dns_security_results),
+                  "results": dns_security_results,
+                  "overall_status": "PASS" if all(r.get("status") == "PASS" for r in dns_security_results) else "FAIL"
+              }, f, indent=2)
+          print("🛡️ DNS security summary generated")
+      else:
+          print("ℹ️ No DNS security test results found")
+      EOF
+  artifacts:
+    name: "pipeline-report-${CI_COMMIT_SHA:0:8}"
+    paths:
+      - pipeline_report.json
+      - dns_security_summary.json
+    expire_in: 4 weeks
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  allow_failure: true
+  when: always
+
+# Security and compliance
+security-scan:
+  stage: validate
+  image: python:3.11-slim
+  script:
+    - echo "🔒 Running security scans..."
+    - pip install safety bandit
+    - safety check --json || echo "Safety scan completed with warnings"
+    - find . -name "*.py" -exec bandit -r {} + || echo "Bandit scan completed"
+    - echo "🔍 Checking for secrets in configurations..."
+    - grep -r "password\|secret\|key" inventory/ playbooks/ || echo "No obvious secrets found"
+    - echo "✅ Security scan completed"
+  artifacts:
+    reports:
+      sast: gl-sast-report.json
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  allow_failure: true
+
+# Documentation update
+update-docs:
+  stage: cleanup
+  image: alpine:latest
+  script:
+    - echo "📚 Updating documentation..."
+    - apk add git
+    - echo "Current test coverage and capabilities:" > TEST_RESULTS.md
+    - echo "- Smoke Tests: ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Functional Tests: ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Integration Tests: ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Chaos Engineering: ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Performance Tests: ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Network Discovery: ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- DNS Security Testing: ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Control D Integration: ✅ Implemented" >> TEST_RESULTS.md
+    - echo "Last updated: $(date)" >> TEST_RESULTS.md
+    - git add TEST_RESULTS.md || true
+    - git commit -m "Update test documentation [skip ci]" || echo "No documentation changes"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true

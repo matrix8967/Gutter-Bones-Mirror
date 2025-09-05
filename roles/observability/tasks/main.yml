@@ -1,0 +1,865 @@
+---
+# Observability and Monitoring Role - Gutter Bonez Infrastructure Automation
+# Comprehensive monitoring, logging, and observability setup
+
+- name: Display observability setup banner
+  debug:
+    msg: |
+      📊━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━📊
+                            GUTTER BONEZ OBSERVABILITY SUITE
+
+                       Monitoring, Logging & Performance Analytics
+      📊━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━📊
+
+      Target: {{ inventory_hostname }}
+      Monitoring Profile: {{ monitoring_profile | default('standard') }}
+      Log Level: {{ log_level | default('INFO') }}
+
+- name: Set observability facts
+  set_fact:
+    observability_timestamp: "{{ ansible_date_time.iso8601 }}"
+    monitoring_components: {}
+    log_collectors: {}
+    metrics_endpoints: {}
+    health_checks: {}
+
+# System Monitoring Setup
+- name: Install system monitoring tools
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - htop
+    - iotop
+    - nethogs
+    - ncdu
+    - jq
+    - curl
+    - netcat
+  when: ansible_system == "Linux"
+  become: yes
+  tags: ['observability', 'tools']
+
+- name: Create monitoring directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ monitoring_user | default('root') }}"
+    group: "{{ monitoring_group | default('root') }}"
+    mode: '0755'
+  loop:
+    - /opt/gutter_bonez/monitoring
+    - /opt/gutter_bonez/logs
+    - /opt/gutter_bonez/metrics
+    - /opt/gutter_bonez/health_checks
+    - /var/log/gutter_bonez
+  become: yes
+  tags: ['observability', 'setup']
+
+# System Metrics Collection
+- name: Create system metrics collector script
+  copy:
+    content: |
+      #!/bin/bash
+      # Gutter Bonez System Metrics Collector
+      # Generated: {{ observability_timestamp }}
+
+      TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      HOSTNAME="{{ inventory_hostname }}"
+      METRICS_DIR="/opt/gutter_bonez/metrics"
+      LOG_FILE="/var/log/gutter_bonez/metrics.log"
+
+      # Create metrics file
+      METRICS_FILE="$METRICS_DIR/system_metrics_$(date +%Y%m%d_%H%M%S).json"
+
+      # Collect system metrics
+      {
+        echo "{"
+        echo "  \"timestamp\": \"$TIMESTAMP\","
+        echo "  \"hostname\": \"$HOSTNAME\","
+        echo "  \"system\": {"
+
+        # CPU metrics
+        echo "    \"cpu\": {"
+        echo "      \"usage_percent\": $(top -bn1 | grep "Cpu(s)" | awk '{print $2+$4}' | cut -d'%' -f1 || echo "0"),"
+        echo "      \"load_average\": {"
+        echo "        \"1min\": $(uptime | awk -F'load average:' '{print $2}' | awk -F',' '{print $1}' | xargs),"
+        echo "        \"5min\": $(uptime | awk -F'load average:' '{print $2}' | awk -F',' '{print $2}' | xargs),"
+        echo "        \"15min\": $(uptime | awk -F'load average:' '{print $2}' | awk -F',' '{print $3}' | xargs)"
+        echo "      },"
+        echo "      \"cores\": $(nproc)"
+        echo "    },"
+
+        # Memory metrics
+        echo "    \"memory\": {"
+        TOTAL_MEM=$(free -b | awk '/^Mem:/{print $2}')
+        USED_MEM=$(free -b | awk '/^Mem:/{print $3}')
+        AVAILABLE_MEM=$(free -b | awk '/^Mem:/{print $7}')
+        echo "      \"total_bytes\": $TOTAL_MEM,"
+        echo "      \"used_bytes\": $USED_MEM,"
+        echo "      \"available_bytes\": $AVAILABLE_MEM,"
+        echo "      \"usage_percent\": $(echo "scale=2; $USED_MEM * 100 / $TOTAL_MEM" | bc)"
+        echo "    },"
+
+        # Disk metrics
+        echo "    \"disk\": {"
+        DISK_INFO=$(df -B1 / | tail -n1)
+        TOTAL_DISK=$(echo $DISK_INFO | awk '{print $2}')
+        USED_DISK=$(echo $DISK_INFO | awk '{print $3}')
+        AVAILABLE_DISK=$(echo $DISK_INFO | awk '{print $4}')
+        echo "      \"total_bytes\": $TOTAL_DISK,"
+        echo "      \"used_bytes\": $USED_DISK,"
+        echo "      \"available_bytes\": $AVAILABLE_DISK,"
+        echo "      \"usage_percent\": $(echo $DISK_INFO | awk '{print $5}' | cut -d'%' -f1)"
+        echo "    },"
+
+        # Network metrics
+        echo "    \"network\": {"
+        NETWORK_INTERFACE="{{ ansible_default_ipv4.interface | default('eth0') }}"
+        RX_BYTES=$(cat /sys/class/net/$NETWORK_INTERFACE/statistics/rx_bytes 2>/dev/null || echo "0")
+        TX_BYTES=$(cat /sys/class/net/$NETWORK_INTERFACE/statistics/tx_bytes 2>/dev/null || echo "0")
+        echo "      \"interface\": \"$NETWORK_INTERFACE\","
+        echo "      \"rx_bytes\": $RX_BYTES,"
+        echo "      \"tx_bytes\": $TX_BYTES"
+        echo "    },"
+
+        # System info
+        echo "    \"uptime_seconds\": $(cat /proc/uptime | awk '{print int($1)}'),"
+        echo "    \"boot_time\": \"$(uptime -s)Z\""
+        echo "  },"
+
+        # Service status
+        echo "  \"services\": {"
+        SERVICES=("ssh" "ctrld" "systemd-resolved" "networking")
+        SERVICE_COUNT=0
+        for service in "${SERVICES[@]}"; do
+          if [ $SERVICE_COUNT -gt 0 ]; then echo ","; fi
+          STATUS=$(systemctl is-active $service 2>/dev/null || echo "inactive")
+          echo "    \"$service\": \"$STATUS\""
+          SERVICE_COUNT=$((SERVICE_COUNT + 1))
+        done
+        echo "  },"
+
+        # DNS health check
+        echo "  \"dns_health\": {"
+        DNS_TEST=$(dig @127.0.0.1 google.com +short +time=5 2>/dev/null)
+        if [ -n "$DNS_TEST" ]; then
+          echo "    \"status\": \"healthy\","
+          echo "    \"test_domain\": \"google.com\","
+          echo "    \"response\": \"$DNS_TEST\""
+        else
+          echo "    \"status\": \"unhealthy\","
+          echo "    \"test_domain\": \"google.com\","
+          echo "    \"error\": \"DNS resolution failed\""
+        fi
+        echo "  }"
+
+        echo "}"
+      } > "$METRICS_FILE"
+
+      # Log metrics collection
+      echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") [INFO] System metrics collected: $METRICS_FILE" >> "$LOG_FILE"
+
+      # Keep only last 24 hours of metrics (cleanup)
+      find "$METRICS_DIR" -name "system_metrics_*.json" -mtime +1 -delete 2>/dev/null
+    dest: /opt/gutter_bonez/monitoring/collect_metrics.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  tags: ['observability', 'metrics']
+
+# Health Check Scripts
+- name: Create comprehensive health check script
+  copy:
+    content: |
+      #!/bin/bash
+      # Gutter Bonez Health Check Suite
+      # Generated: {{ observability_timestamp }}
+
+      TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      HOSTNAME="{{ inventory_hostname }}"
+      HEALTH_DIR="/opt/gutter_bonez/health_checks"
+      LOG_FILE="/var/log/gutter_bonez/health.log"
+
+      # Health check results file
+      HEALTH_FILE="$HEALTH_DIR/health_check_$(date +%Y%m%d_%H%M%S).json"
+
+      # Function to check service status
+      check_service() {
+        local service_name=$1
+        if systemctl is-active --quiet "$service_name"; then
+          echo "\"$service_name\": {\"status\": \"healthy\", \"active\": true}"
+        else
+          echo "\"$service_name\": {\"status\": \"unhealthy\", \"active\": false}"
+        fi
+      }
+
+      # Function to check port connectivity
+      check_port() {
+        local port=$1
+        local service_name=$2
+        if nc -z localhost "$port" 2>/dev/null; then
+          echo "\"$service_name\": {\"port\": $port, \"status\": \"accessible\"}"
+        else
+          echo "\"$service_name\": {\"port\": $port, \"status\": \"inaccessible\"}"
+        fi
+      }
+
+      # Function to check disk space
+      check_disk_space() {
+        local threshold=${1:-90}
+        local usage=$(df / | tail -1 | awk '{print $5}' | cut -d'%' -f1)
+        if [ "$usage" -gt "$threshold" ]; then
+          echo "\"disk_space\": {\"usage_percent\": $usage, \"status\": \"critical\", \"threshold\": $threshold}"
+        elif [ "$usage" -gt 80 ]; then
+          echo "\"disk_space\": {\"usage_percent\": $usage, \"status\": \"warning\", \"threshold\": $threshold}"
+        else
+          echo "\"disk_space\": {\"usage_percent\": $usage, \"status\": \"healthy\", \"threshold\": $threshold}"
+        fi
+      }
+
+      # Function to check memory usage
+      check_memory() {
+        local threshold=${1:-90}
+        local usage=$(free | grep Mem | awk '{printf "%.0f", $3/$2 * 100.0}')
+        if [ "$usage" -gt "$threshold" ]; then
+          echo "\"memory\": {\"usage_percent\": $usage, \"status\": \"critical\", \"threshold\": $threshold}"
+        elif [ "$usage" -gt 80 ]; then
+          echo "\"memory\": {\"usage_percent\": $usage, \"status\": \"warning\", \"threshold\": $threshold}"
+        else
+          echo "\"memory\": {\"usage_percent\": $usage, \"status\": \"healthy\", \"threshold\": $threshold}"
+        fi
+      }
+
+      # Function to check DNS resolution
+      check_dns() {
+        local test_domain="google.com"
+        local dns_server="127.0.0.1"
+
+        if timeout 10 dig @"$dns_server" "$test_domain" +short > /dev/null 2>&1; then
+          echo "\"dns_resolution\": {\"server\": \"$dns_server\", \"test_domain\": \"$test_domain\", \"status\": \"healthy\"}"
+        else
+          echo "\"dns_resolution\": {\"server\": \"$dns_server\", \"test_domain\": \"$test_domain\", \"status\": \"unhealthy\"}"
+        fi
+      }
+
+      # Generate health check report
+      {
+        echo "{"
+        echo "  \"timestamp\": \"$TIMESTAMP\","
+        echo "  \"hostname\": \"$HOSTNAME\","
+        echo "  \"health_checks\": {"
+
+        # System resource checks
+        check_disk_space {{ disk_usage_threshold | default(90) }}
+        echo ","
+        check_memory {{ memory_usage_threshold | default(90) }}
+        echo ","
+
+        # Service checks
+        echo "    \"services\": {"
+        SERVICES=({% for service in critical_services | default(['ssh', 'ctrld']) %}"{{ service }}"{{ ' ' if not loop.last else '' }}{% endfor %})
+        SERVICE_COUNT=0
+        for service in "${SERVICES[@]}"; do
+          if [ $SERVICE_COUNT -gt 0 ]; then echo ","; fi
+          echo "      $(check_service "$service")"
+          SERVICE_COUNT=$((SERVICE_COUNT + 1))
+        done
+        echo "    },"
+
+        # Port accessibility checks
+        echo "    \"ports\": {"
+        PORTS=({% for port in critical_ports | default([22, 53]) %}"{{ port }}"{{ ' ' if not loop.last else '' }}{% endfor %})
+        PORT_COUNT=0
+        for port in "${PORTS[@]}"; do
+          if [ $PORT_COUNT -gt 0 ]; then echo ","; fi
+          echo "      $(check_port "$port" "port_$port")"
+          PORT_COUNT=$((PORT_COUNT + 1))
+        done
+        echo "    },"
+
+        # DNS health check
+        check_dns
+        echo ","
+
+        # Connectivity checks
+        echo "    \"connectivity\": {"
+        if ping -c 1 -W 5 8.8.8.8 > /dev/null 2>&1; then
+          echo "      \"external_connectivity\": {\"target\": \"8.8.8.8\", \"status\": \"healthy\"}"
+        else
+          echo "      \"external_connectivity\": {\"target\": \"8.8.8.8\", \"status\": \"unhealthy\"}"
+        fi
+        echo "    }"
+
+        echo "  },"
+
+        # Overall health status
+        echo "  \"overall_status\": \"healthy\","
+        echo "  \"check_duration_seconds\": $(($(date +%s) - $(date -d \"$TIMESTAMP\" +%s)))"
+        echo "}"
+      } > "$HEALTH_FILE"
+
+      # Log health check
+      echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") [INFO] Health check completed: $HEALTH_FILE" >> "$LOG_FILE"
+
+      # Keep only last 7 days of health checks
+      find "$HEALTH_DIR" -name "health_check_*.json" -mtime +7 -delete 2>/dev/null
+
+      # Exit with appropriate code based on health status
+      if grep -q "unhealthy\|critical" "$HEALTH_FILE"; then
+        echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") [WARN] Health issues detected" >> "$LOG_FILE"
+        exit 1
+      else
+        exit 0
+      fi
+    dest: /opt/gutter_bonez/monitoring/health_check.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  tags: ['observability', 'health']
+
+# Log Collection and Management
+- name: Create log aggregation script
+  copy:
+    content: |
+      #!/bin/bash
+      # Gutter Bonez Log Aggregation
+      # Generated: {{ observability_timestamp }}
+
+      TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      HOSTNAME="{{ inventory_hostname }}"
+      LOG_DIR="/opt/gutter_bonez/logs"
+      ARCHIVE_DIR="$LOG_DIR/archive"
+
+      # Create archive directory
+      mkdir -p "$ARCHIVE_DIR"
+
+      # Log sources to collect
+      LOG_SOURCES=(
+        "/var/log/syslog:system"
+        "/var/log/auth.log:authentication"
+        "/var/log/ctrld/ctrld.log:dns"
+        "/var/log/nginx/access.log:web_access"
+        "/var/log/nginx/error.log:web_error"
+        "/var/log/gutter_bonez/metrics.log:metrics"
+        "/var/log/gutter_bonez/health.log:health"
+      )
+
+      # Aggregate logs
+      for source in "${LOG_SOURCES[@]}"; do
+        LOG_FILE=$(echo "$source" | cut -d':' -f1)
+        LOG_TYPE=$(echo "$source" | cut -d':' -f2)
+
+        if [ -f "$LOG_FILE" ]; then
+          # Copy recent logs (last 1000 lines)
+          DEST_FILE="$LOG_DIR/${LOG_TYPE}_$(date +%Y%m%d).log"
+          tail -n 1000 "$LOG_FILE" >> "$DEST_FILE"
+
+          # Add timestamp and source info
+          echo "# Log aggregated: $TIMESTAMP from $LOG_FILE" >> "$DEST_FILE"
+        fi
+      done
+
+      # Compress old logs (older than 1 day)
+      find "$LOG_DIR" -name "*.log" -mtime +1 -exec gzip {} \;
+
+      # Move compressed logs to archive (older than 7 days)
+      find "$LOG_DIR" -name "*.log.gz" -mtime +7 -exec mv {} "$ARCHIVE_DIR/" \;
+
+      # Clean up old archives (older than 30 days)
+      find "$ARCHIVE_DIR" -name "*.log.gz" -mtime +30 -delete
+
+      # Log aggregation summary
+      echo "$TIMESTAMP [INFO] Log aggregation completed on $HOSTNAME" >> "/var/log/gutter_bonez/aggregation.log"
+    dest: /opt/gutter_bonez/monitoring/aggregate_logs.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  tags: ['observability', 'logging']
+
+# Performance Monitoring
+- name: Create performance monitoring script
+  copy:
+    content: |
+      #!/bin/bash
+      # Gutter Bonez Performance Monitor
+      # Generated: {{ observability_timestamp }}
+
+      TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      HOSTNAME="{{ inventory_hostname }}"
+      PERF_DIR="/opt/gutter_bonez/metrics"
+      LOG_FILE="/var/log/gutter_bonez/performance.log"
+
+      # Performance metrics file
+      PERF_FILE="$PERF_DIR/performance_$(date +%Y%m%d_%H%M%S).json"
+
+      # Function to measure DNS query performance
+      measure_dns_performance() {
+        local test_domains=("google.com" "cloudflare.com" "github.com")
+        local dns_server="127.0.0.1"
+        local total_time=0
+        local successful_queries=0
+
+        echo "    \"dns_performance\": {"
+        echo "      \"test_domains\": [$(printf '"%s",' "${test_domains[@]}" | sed 's/,$//')],"
+        echo "      \"results\": ["
+
+        for i, domain in "${test_domains[@]}"; do
+          start_time=$(date +%s%N)
+          if timeout 10 dig @"$dns_server" "$domain" +short > /dev/null 2>&1; then
+            end_time=$(date +%s%N)
+            query_time=$(( (end_time - start_time) / 1000000 ))  # Convert to milliseconds
+            total_time=$((total_time + query_time))
+            successful_queries=$((successful_queries + 1))
+            echo "        {\"domain\": \"$domain\", \"response_time_ms\": $query_time, \"status\": \"success\"}"
+          else
+            echo "        {\"domain\": \"$domain\", \"response_time_ms\": 0, \"status\": \"failed\"}"
+          fi
+          if [ $((i + 1)) -lt ${#test_domains[@]} ]; then echo ","; fi
+        done
+
+        echo "      ],"
+        if [ $successful_queries -gt 0 ]; then
+          avg_time=$((total_time / successful_queries))
+          echo "      \"average_response_time_ms\": $avg_time,"
+        else
+          echo "      \"average_response_time_ms\": null,"
+        fi
+        echo "      \"success_rate_percent\": $(echo "scale=2; $successful_queries * 100 / ${#test_domains[@]}" | bc)"
+        echo "    }"
+      }
+
+      # Function to measure network throughput
+      measure_network_throughput() {
+        echo "    \"network_throughput\": {"
+
+        # Measure internal network speed (if iperf3 is available)
+        if command -v iperf3 > /dev/null 2>&1; then
+          # This would need a target server - simplified for now
+          echo "      \"tool\": \"iperf3\","
+          echo "      \"status\": \"available\""
+        else
+          # Use simple ping measurements
+          PING_TARGET="8.8.8.8"
+          PING_RESULTS=$(ping -c 10 -i 0.2 "$PING_TARGET" 2>/dev/null)
+
+          if [ $? -eq 0 ]; then
+            AVG_LATENCY=$(echo "$PING_RESULTS" | tail -1 | awk -F'/' '{print $5}')
+            PACKET_LOSS=$(echo "$PING_RESULTS" | grep "packet loss" | awk '{print $6}' | cut -d'%' -f1)
+
+            echo "      \"tool\": \"ping\","
+            echo "      \"target\": \"$PING_TARGET\","
+            echo "      \"average_latency_ms\": \"$AVG_LATENCY\","
+            echo "      \"packet_loss_percent\": \"$PACKET_LOSS\""
+          else
+            echo "      \"tool\": \"ping\","
+            echo "      \"status\": \"failed\""
+          fi
+        fi
+
+        echo "    }"
+      }
+
+      # Function to measure disk I/O performance
+      measure_disk_io() {
+        echo "    \"disk_io\": {"
+
+        # Simple disk write/read test
+        TEST_FILE="/tmp/gutter_bonez_io_test_$$"
+
+        # Write test (1MB)
+        WRITE_START=$(date +%s%N)
+        dd if=/dev/zero of="$TEST_FILE" bs=1M count=1 2>/dev/null
+        WRITE_END=$(date +%s%N)
+        WRITE_TIME=$(( (WRITE_END - WRITE_START) / 1000000 ))  # Convert to milliseconds
+
+        # Read test
+        READ_START=$(date +%s%N)
+        dd if="$TEST_FILE" of=/dev/null bs=1M count=1 2>/dev/null
+        READ_END=$(date +%s%N)
+        READ_TIME=$(( (READ_END - READ_START) / 1000000 ))  # Convert to milliseconds
+
+        # Cleanup
+        rm -f "$TEST_FILE"
+
+        echo "      \"write_time_ms\": $WRITE_TIME,"
+        echo "      \"read_time_ms\": $READ_TIME,"
+        echo "      \"test_size_mb\": 1"
+        echo "    }"
+      }
+
+      # Generate performance report
+      {
+        echo "{"
+        echo "  \"timestamp\": \"$TIMESTAMP\","
+        echo "  \"hostname\": \"$HOSTNAME\","
+        echo "  \"performance_metrics\": {"
+
+        # DNS performance
+        measure_dns_performance
+        echo ","
+
+        # Network performance
+        measure_network_throughput
+        echo ","
+
+        # Disk I/O performance
+        measure_disk_io
+
+        echo "  },"
+        echo "  \"measurement_duration_seconds\": $(($(date +%s) - $(date -d \"$TIMESTAMP\" +%s)))"
+        echo "}"
+      } > "$PERF_FILE"
+
+      # Log performance measurement
+      echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") [INFO] Performance metrics collected: $PERF_FILE" >> "$LOG_FILE"
+
+      # Keep only last 24 hours of performance metrics
+      find "$PERF_DIR" -name "performance_*.json" -mtime +1 -delete 2>/dev/null
+    dest: /opt/gutter_bonez/monitoring/performance_monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  tags: ['observability', 'performance']
+
+# Cron Jobs for Automated Monitoring
+- name: Setup monitoring cron jobs
+  cron:
+    name: "{{ item.name }}"
+    minute: "{{ item.minute }}"
+    hour: "{{ item.hour | default('*') }}"
+    day: "{{ item.day | default('*') }}"
+    month: "{{ item.month | default('*') }}"
+    weekday: "{{ item.weekday | default('*') }}"
+    job: "{{ item.job }}"
+    user: root
+  loop:
+    - name: "Gutter Bonez System Metrics Collection"
+      minute: "*/5"
+      job: "/opt/gutter_bonez/monitoring/collect_metrics.sh"
+    - name: "Gutter Bonez Health Check"
+      minute: "*/10"
+      job: "/opt/gutter_bonez/monitoring/health_check.sh"
+    - name: "Gutter Bonez Log Aggregation"
+      minute: "0"
+      hour: "*/6"
+      job: "/opt/gutter_bonez/monitoring/aggregate_logs.sh"
+    - name: "Gutter Bonez Performance Monitoring"
+      minute: "15,45"
+      job: "/opt/gutter_bonez/monitoring/performance_monitor.sh"
+  become: yes
+  when: enable_automated_monitoring | default(true)
+  tags: ['observability', 'automation']
+
+# Monitoring Dashboard Generator
+- name: Create simple monitoring dashboard generator
+  copy:
+    content: |
+      #!/bin/bash
+      # Gutter Bonez Monitoring Dashboard Generator
+      # Generated: {{ observability_timestamp }}
+
+      TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      HOSTNAME="{{ inventory_hostname }}"
+      DASHBOARD_FILE="/opt/gutter_bonez/monitoring/dashboard.html"
+      METRICS_DIR="/opt/gutter_bonez/metrics"
+      HEALTH_DIR="/opt/gutter_bonez/health_checks"
+
+      # Get latest metrics
+      LATEST_METRICS=$(ls -t "$METRICS_DIR"/system_metrics_*.json 2>/dev/null | head -1)
+      LATEST_HEALTH=$(ls -t "$HEALTH_DIR"/health_check_*.json 2>/dev/null | head -1)
+      LATEST_PERFORMANCE=$(ls -t "$METRICS_DIR"/performance_*.json 2>/dev/null | head -1)
+
+      # Generate HTML dashboard
+      cat > "$DASHBOARD_FILE" << 'EOF'
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>🦴 Gutter Bonez Monitoring Dashboard</title>
+          <style>
+              body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #00ff00; margin: 20px; }
+              .container { max-width: 1200px; margin: 0 auto; }
+              .header { text-align: center; border: 2px solid #00ff00; padding: 20px; margin-bottom: 20px; }
+              .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+              .card { border: 1px solid #00ff00; padding: 15px; background: #1a1a1a; }
+              .card h3 { color: #00ff41; margin-top: 0; }
+              .status-healthy { color: #00ff00; }
+              .status-warning { color: #ffff00; }
+              .status-critical { color: #ff0000; }
+              .metric { display: flex; justify-content: space-between; margin: 10px 0; }
+              .timestamp { color: #888; font-size: 0.8em; }
+              pre { background: #2a2a2a; padding: 10px; overflow-x: auto; border-left: 3px solid #00ff00; }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <div class="header">
+                  <h1>🦴 GUTTER BONEZ MONITORING DASHBOARD</h1>
+                  <p>Host: HOSTNAME_PLACEHOLDER | Updated: TIMESTAMP_PLACEHOLDER</p>
+                  <p><em>Always lots left to monitor. Nowhere to go but up! 🚀</em></p>
+              </div>
+
+              <div class="grid">
+                  <div class="card">
+                      <h3>📊 System Metrics</h3>
+                      <div id="system-metrics">
+                          <div class="metric">
+                              <span>CPU Usage:</span>
+                              <span class="status-healthy">Loading...</span>
+                          </div>
+                          <div class="metric">
+                              <span>Memory Usage:</span>
+                              <span class="status-healthy">Loading...</span>
+                          </div>
+                          <div class="metric">
+                              <span>Disk Usage:</span>
+                              <span class="status-healthy">Loading...</span>
+                          </div>
+                          <div class="metric">
+                              <span>Uptime:</span>
+                              <span>Loading...</span>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div class="card">
+                      <h3>🔍 Health Status</h3>
+                      <div id="health-status">
+                          <div class="metric">
+                              <span>Overall Status:</span>
+                              <span class="status-healthy">Loading...</span>
+                          </div>
+                          <div class="metric">
+                              <span>Services:</span>
+                              <span>Loading...</span>
+                          </div>
+                          <div class="metric">
+                              <span>DNS Health:</span>
+                              <span>Loading...</span>
+                          </div>
+                          <div class="metric">
+                              <span>Connectivity:</span>
+                              <span>Loading...</span>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div class="card">
+                      <h3>⚡ Performance</h3>
+                      <div id="performance-metrics">
+                          <div class="metric">
+                              <span>DNS Avg Response:</span>
+                              <span>Loading...</span>
+                          </div>
+                          <div class="metric">
+                              <span>Network Latency:</span>
+                              <span>Loading...</span>
+                          </div>
+                          <div class="metric">
+                              <span>Disk I/O:</span>
+                              <span>Loading...</span>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div class="card">
+                      <h3>📋 Recent Logs</h3>
+                      <div id="recent-logs">
+                          <pre>Loading recent system logs...</pre>
+                      </div>
+                  </div>
+              </div>
+
+              <div class="card" style="margin-top: 20px;">
+                  <h3>🔧 Quick Actions</h3>
+                  <p>Manual monitoring commands:</p>
+                  <pre>
+# System metrics
+/opt/gutter_bonez/monitoring/collect_metrics.sh
+
+# Health check
+/opt/gutter_bonez/monitoring/health_check.sh
+
+# Performance test
+/opt/gutter_bonez/monitoring/performance_monitor.sh
+
+# View latest results
+ls -la /opt/gutter_bonez/metrics/
+ls -la /opt/gutter_bonez/health_checks/
+                  </pre>
+              </div>
+          </div>
+
+          <script>
+              // Auto-refresh every 30 seconds
+              setTimeout(function() {
+                  location.reload();
+              }, 30000);
+          </script>
+      </body>
+      </html>
+      EOF
+
+      # Replace placeholders with actual data
+      sed -i "s/HOSTNAME_PLACEHOLDER/$HOSTNAME/g" "$DASHBOARD_FILE"
+      sed -i "s/TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" "$DASHBOARD_FILE"
+
+      # Load and inject metrics if available
+      if [ -f "$LATEST_METRICS" ]; then
+          # Extract key metrics using jq if available
+          if command -v jq > /dev/null 2>&1; then
+              CPU_USAGE=$(jq -r '.system.cpu.usage_percent // "N/A"' "$LATEST_METRICS" 2>/dev/null || echo "N/A")
+              MEMORY_USAGE=$(jq -r '.system.memory.usage_percent // "N/A"' "$LATEST_METRICS" 2>/dev/null || echo "N/A")
+              DISK_USAGE=$(jq -r '.system.disk.usage_percent // "N/A"' "$LATEST_METRICS" 2>/dev/null || echo "N/A")
+              UPTIME=$(jq -r '.system.uptime_seconds // "N/A"' "$LATEST_METRICS" 2>/dev/null || echo "N/A")
+
+              # Convert uptime to human readable
+              if [ "$UPTIME" != "N/A" ] && [ "$UPTIME" -gt 0 ]; then
+                  UPTIME_HOURS=$((UPTIME / 3600))
+                  UPTIME_DAYS=$((UPTIME_HOURS / 24))
+                  UPTIME="${UPTIME_DAYS}d ${UPTIME_HOURS}h"
+              fi
+
+              # Update dashboard with real data
+              sed -i "s/CPU Usage:<\/span><span[^>]*>Loading\.\.\./CPU Usage:<\/span><span class=\"status-healthy\">${CPU_USAGE}%/g" "$DASHBOARD_FILE"
+              sed -i "s/Memory Usage:<\/span><span[^>]*>Loading\.\.\./Memory Usage:<\/span><span class=\"status-healthy\">${MEMORY_USAGE}%/g" "$DASHBOARD_FILE"
+              sed -i "s/Disk Usage:<\/span><span[^>]*>Loading\.\.\./Disk Usage:<\/span><span class=\"status-healthy\">${DISK_USAGE}%/g" "$DASHBOARD_FILE"
+              sed -i "s/Uptime:<\/span><span[^>]*>Loading\.\.\./Uptime:<\/span><span>${UPTIME}/g" "$DASHBOARD_FILE"
+          fi
+      fi
+
+      echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") [INFO] Monitoring dashboard generated: $DASHBOARD_FILE" >> /var/log/gutter_bonez/dashboard.log
+    dest: /opt/gutter_bonez/monitoring/generate_dashboard.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  tags: ['observability', 'dashboard']
+
+# Alert System
+- name: Create alerting script
+  copy:
+    content: |
+      #!/bin/bash
+      # Gutter Bonez Alert System
+      # Generated: {{ observability_timestamp }}
+
+      TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      HOSTNAME="{{ inventory_hostname }}"
+      ALERT_LOG="/var/log/gutter_bonez/alerts.log"
+      HEALTH_DIR="/opt/gutter_bonez/health_checks"
+
+      # Get latest health check
+      LATEST_HEALTH=$(ls -t "$HEALTH_DIR"/health_check_*.json 2>/dev/null | head -1)
+
+      if [ -f "$LATEST_HEALTH" ]; then
+          # Check for critical issues
+          if grep -q "critical\|unhealthy" "$LATEST_HEALTH"; then
+              ALERT_MSG="🚨 CRITICAL: Health issues detected on $HOSTNAME at $TIMESTAMP"
+              echo "$TIMESTAMP [CRITICAL] $ALERT_MSG" >> "$ALERT_LOG"
+
+              # Log specific issues
+              if command -v jq > /dev/null 2>&1; then
+                  ISSUES=$(jq -r '.health_checks | to_entries[] | select(.value.status == "critical" or .value.status == "unhealthy") | "\(.key): \(.value.status)"' "$LATEST_HEALTH" 2>/dev/null || echo "Unable to parse issues")
+                  echo "$TIMESTAMP [DETAILS] Issues: $ISSUES" >> "$ALERT_LOG"
+              fi
+
+              # Send alert (placeholder - could integrate with email, Slack, etc.)
+              logger -t "gutter_bonez_alert" "$ALERT_MSG"
+              exit 1
+          else
+              echo "$TIMESTAMP [INFO] All systems healthy on $HOSTNAME" >> "$ALERT_LOG"
+              exit 0
+          fi
+      else
+          echo "$TIMESTAMP [WARN] No health check data available for alerting" >> "$ALERT_LOG"
+          exit 2
+      fi
+    dest: /opt/gutter_bonez/monitoring/check_alerts.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  tags: ['observability', 'alerting']
+
+# Update cron jobs to include dashboard generation and alerting
+- name: Add dashboard and alerting cron jobs
+  cron:
+    name: "{{ item.name }}"
+    minute: "{{ item.minute }}"
+    hour: "{{ item.hour | default('*') }}"
+    day: "{{ item.day | default('*') }}"
+    month: "{{ item.month | default('*') }}"
+    weekday: "{{ item.weekday | default('*') }}"
+    job: "{{ item.job }}"
+    user: root
+  loop:
+    - name: "Gutter Bonez Dashboard Generation"
+      minute: "*/5"
+      job: "/opt/gutter_bonez/monitoring/generate_dashboard.sh"
+    - name: "Gutter Bonez Alert Check"
+      minute: "*/15"
+      job: "/opt/gutter_bonez/monitoring/check_alerts.sh"
+  become: yes
+  when: enable_automated_monitoring | default(true)
+  tags: ['observability', 'automation']
+
+# Set observability facts
+- name: Set observability facts for integration
+  set_fact:
+    gutter_bonez_observability_enabled: true
+    gutter_bonez_monitoring_path: "/opt/gutter_bonez/monitoring"
+    gutter_bonez_dashboard_url: "file:///opt/gutter_bonez/monitoring/dashboard.html"
+    gutter_bonez_metrics_path: "/opt/gutter_bonez/metrics"
+    gutter_bonez_health_path: "/opt/gutter_bonez/health_checks"
+    gutter_bonez_logs_path: "/opt/gutter_bonez/logs"
+  tags: ['observability', 'facts']
+
+# Display observability setup summary
+- name: Display observability setup summary
+  debug:
+    msg: |
+      📊━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━📊
+                            GUTTER BONEZ OBSERVABILITY SETUP COMPLETE
+
+      🎯 MONITORING COMPONENTS DEPLOYED:
+      ✅ System Metrics Collection (every 5 minutes)
+      ✅ Health Checks (every 10 minutes)
+      ✅ Performance Monitoring (every 30 minutes)
+      ✅ Log Aggregation (every 6 hours)
+      ✅ Dashboard Generation (every 5 minutes)
+      ✅ Alert System (every 15 minutes)
+
+      📂 MONITORING PATHS:
+      • Scripts: /opt/gutter_bonez/monitoring/
+      • Metrics: /opt/gutter_bonez/metrics/
+      • Health Checks: /opt/gutter_bonez/health_checks/
+      • Logs: /opt/gutter_bonez/logs/
+      • Dashboard: /opt/gutter_bonez/monitoring/dashboard.html
+
+      🔧 MANUAL COMMANDS:
+      • Health Check: /opt/gutter_bonez/monitoring/health_check.sh
+      • Metrics Collection: /opt/gutter_bonez/monitoring/collect_metrics.sh
+      • Performance Test: /opt/gutter_bonez/monitoring/performance_monitor.sh
+      • Generate Dashboard: /opt/gutter_bonez/monitoring/generate_dashboard.sh
+
+      📊 DASHBOARD ACCESS:
+      Local: file:///opt/gutter_bonez/monitoring/dashboard.html
+
+      📋 LOG LOCATIONS:
+      • System Metrics: /var/log/gutter_bonez/metrics.log
+      • Health Checks: /var/log/gutter_bonez/health.log
+      • Performance: /var/log/gutter_bonez/performance.log
+      • Alerts: /var/log/gutter_bonez/alerts.log
+      • Dashboard: /var/log/gutter_bonez/dashboard.log
+
+      📊━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━📊
+
+      🦴 Observability deployed! Always monitoring. Nowhere to go but up! 🚀
+  tags: ['observability', 'summary']

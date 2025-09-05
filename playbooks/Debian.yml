@@ -1,77 +1,179 @@
 ---
-- name: Debian Setup & Update
+- name: Debian System Setup and Configuration
+  hosts: debian_systems
   become: true
-  hosts: all
-  vars_files:
-    - ../group_vars/debian.yml
+  gather_facts: true
+  vars:
+    # Default configuration that can be overridden
+    debian_setup:
+      create_user: true
+      configure_ssh: true
+      setup_firewall: true
+      install_packages: true
+      configure_motd: true
+      setup_dotfiles: true
+      remove_bloat: true
+      enable_updates: true
+
+    # Default packages for Debian systems
+    debian_packages:
+      - aptitude
+      - curl
+      - wget
+      - git
+      - zsh
+      - tmux
+      - htop
+      - neofetch
+      - unzip
+      - build-essential
+      - software-properties-common
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+
+    # Packages to remove (privacy/bloat concerns)
+    debian_remove_packages:
+      - popularity-contest
+      - apport
+      - whoopsie
+
+    # SSH hardening configuration
+    ssh_config:
+      port: "{{ ssh_port | default('22') }}"
+      permit_root_login: "no"
+      password_authentication: "no"
+      pubkey_authentication: "yes"
+      challenge_response_authentication: "no"
+      max_auth_tries: 3
+      client_alive_interval: 300
+      client_alive_count_max: 2
 
   vars_prompt:
     - name: "user_name"
-      prompt: Desired username?
+      prompt: "Desired username?"
       private: false
+      default: "{{ ansible_env.USER | default('debian') }}"
 
     - name: "hostname"
-      prompt: Desired hostname?
+      prompt: "Desired hostname?"
       private: false
+      default: "{{ inventory_hostname }}"
+
+    - name: "ssh_port"
+      prompt: "SSH port (22 for default)?"
+      private: false
+      default: "22"
+
+  pre_tasks:
+    - name: Validate input parameters
+      assert:
+        that:
+          - user_name is defined
+          - user_name | length > 0
+          - hostname is defined
+          - hostname | length > 0
+          - ssh_port is defined
+          - ssh_port | int > 0
+          - ssh_port | int < 65536
+        fail_msg: "Invalid input parameters provided"
+
+    - name: Display configuration summary
+      debug:
+        msg: |
+          Debian System Configuration:
+          - Target: {{ inventory_hostname }} ({{ ansible_distribution }} {{ ansible_distribution_version }})
+          - User: {{ user_name }}
+          - Hostname: {{ hostname }}
+          - SSH Port: {{ ssh_port }}
+          - Create User: {{ debian_setup.create_user }}
+          - Configure SSH: {{ debian_setup.configure_ssh }}
+          - Setup Firewall: {{ debian_setup.setup_firewall }}
+
+    - name: Backup existing configuration files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ item }}.backup.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        backup: yes
+      loop:
+        - /etc/ssh/sshd_config
+        - /etc/hostname
+        - /etc/hosts
+      failed_when: false
+      when: debian_setup.configure_ssh or debian_setup.create_user
 
   tasks:
-    - name: Update Apt.
-      apt: name=aptitude update_cache=yes state=latest force_apt_get=yes
-      
-    - name: Apt Update.
-      apt: update_cache=yes
-
-    - name: Apt Upgrade.
+    # Package Management
+    - name: Update package cache
       apt:
-        upgrade: 'yes'
+        update_cache: yes
+        cache_valid_time: 3600
+      retries: 3
+      delay: 5
 
-    - name: Install Default Packages.
-      apt: name={{ apt_packages }} state=latest
-
-    - name: Remove ubuntu spyware
+    - name: Upgrade system packages
       apt:
-        name: popularity-contest
-        state: absent
-
-    - name: Check if a reboot is needed for Debian-based systems
-      stat:
-        path: /var/run/reboot-required
-      register: reboot_required
-
-    - name: Reboot the server if needed
-      reboot:
-        msg: "Reboot initiated by Ansible because of reboot required file."
-        connect_timeout: 5
-        reboot_timeout: 600
-        pre_reboot_delay: 0
-        post_reboot_delay: 30
-        test_command: whoami
-      when: reboot_required.stat.exists
-
-    - name: Remove old packages from the cache
-      apt:
-        autoclean: yes
-
-    - name: Remove dependencies that are no longer needed
-      apt:
+        upgrade: dist
         autoremove: yes
-        purge: yes
+        autoclean: yes
+      register: apt_upgrade
+      retries: 3
+      delay: 10
 
-# User + Group Setup
-    - name: Verify 'sudo' group
+    - name: Install aptitude package manager
+      apt:
+        name: aptitude
+        state: present
+        force_apt_get: yes
+
+    - name: Install default packages
+      apt:
+        name: "{{ debian_packages }}"
+        state: latest
+        update_cache: yes
+      when: debian_setup.install_packages
+      register: package_install
+
+    - name: Remove bloatware packages
+      apt:
+        name: "{{ debian_remove_packages }}"
+        state: absent
+        purge: yes
+      when: debian_setup.remove_bloat
+      failed_when: false
+
+    # System Configuration
+    - name: Set hostname
+      hostname:
+        name: "{{ hostname }}"
+      notify: update hosts file
+
+    - name: Update /etc/hosts with new hostname
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ hostname }}"
+        backup: yes
+
+    # User Management
+    - name: Ensure sudo group exists
       group:
         name: sudo
         state: present
 
-    - name: Allow paswordless sudo to sudoers group.
+    - name: Configure passwordless sudo for sudo group
       lineinfile:
         path: /etc/sudoers
         state: present
-        regexp: '^%sudo'
-        line: '%sudo ALL=(ALL) NOPASSWD: ALL'
-        validate: '/usr/sbin/visudo -cf %s'
+        regexp: "^%sudo"
+        line: "%sudo ALL=(ALL) NOPASSWD: ALL"
+        validate: "/usr/sbin/visudo -cf %s"
+        backup: yes
+      when: debian_setup.create_user
 
-    - name: Create User.
+    - name: Create user account
       user:
         name: "{{ user_name }}"
         state: present
@@ -79,58 +181,247 @@
         append: true
         create_home: true
         shell: /usr/bin/zsh
+        password: "!" # Disable password login
+      when: debian_setup.create_user
+      register: user_creation
 
-    - name: Print message.
-      ansible.builtin.debug:
-        msg: 'Setting hostname to: {{ hostname }}'
-
-    - name: Set a hostname
-      hostname:
-        name: "{{ hostname }}"
-
-    - name: Copy Dotfiles
-      copy:
-        dest: /home/{{ user_name }}/
-        src: ../roles/common/files/home/
-        owner: "{{ user_name }}"
-        group: "{{ user_name }}"
-
-    - name: Delete MOTD
-      file:
-        path: /etc/update-motd.d/
-        state: absent
-
-    - name: Create MOTD
-      file:
-        path: /etc/update-motd.d/
-        state: directory
-
-    - name: Setup new motd
-      copy:
-        dest: /etc/update-motd.d/10-motd
-        src: ../roles/common/files/etc/update-motd.d/10-motd
-        owner: root
-        group: root
-        mode: a+x
-
-# SSH Key Exchange & Service Reload
-    - name: SSH Key Exchange.
+    - name: Set up SSH key for user
       authorized_key:
         user: "{{ user_name }}"
         state: present
         key: "{{ copy_pub_key }}"
+        manage_dir: yes
+      when:
+        - debian_setup.create_user
+        - copy_pub_key is defined
+        - copy_pub_key | length > 0
 
-    - name: Add hardened SSH config
-      copy:
+    # SSH Configuration
+    - name: Generate SSH host keys if missing
+      command: ssh-keygen -A
+      creates: /etc/ssh/ssh_host_rsa_key
+      when: debian_setup.configure_ssh
+
+    - name: Configure SSH daemon
+      template:
+        src: ../roles/common/templates/sshd_config.j2
         dest: /etc/ssh/sshd_config
-        src: ../roles/common/files/etc/ssh/sshd_config
         owner: root
         group: root
-        mode: 0600
-      notify: Reload SSH
+        mode: "0600"
+        backup: yes
+        validate: "/usr/sbin/sshd -T -f %s"
+      when: debian_setup.configure_ssh
+      notify: restart ssh
+
+    # Firewall Configuration
+    - name: Install UFW firewall
+      apt:
+        name: ufw
+        state: present
+      when: debian_setup.setup_firewall
+
+    - name: Configure UFW defaults
+      ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: "incoming", policy: "deny" }
+        - { direction: "outgoing", policy: "allow" }
+      when: debian_setup.setup_firewall
+
+    - name: Allow SSH through firewall
+      ufw:
+        rule: allow
+        port: "{{ ssh_port }}"
+        proto: tcp
+        comment: "SSH access"
+      when: debian_setup.setup_firewall
+
+    - name: Enable UFW firewall
+      ufw:
+        state: enabled
+        logging: "on"
+      when: debian_setup.setup_firewall
+
+    # System Customization
+    - name: Remove default MOTD files
+      file:
+        path: /etc/update-motd.d/
+        state: absent
+      when: debian_setup.configure_motd
+
+    - name: Create MOTD directory
+      file:
+        path: /etc/update-motd.d/
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: debian_setup.configure_motd
+
+    - name: Install custom MOTD
+      template:
+        src: ../roles/common/templates/motd.j2
+        dest: /etc/update-motd.d/10-custom
+        owner: root
+        group: root
+        mode: "0755"
+      when: debian_setup.configure_motd
+
+    # Dotfiles Setup
+    - name: Copy dotfiles to user home
+      copy:
+        src: ../roles/common/files/home/
+        dest: "/home/{{ user_name }}/"
+        owner: "{{ user_name }}"
+        group: "{{ user_name }}"
+        mode: preserve
+        backup: yes
+      when:
+        - debian_setup.setup_dotfiles
+        - debian_setup.create_user
+      failed_when: false
+
+    # System Optimization
+    - name: Configure automatic security updates
+      template:
+        src: ../roles/common/templates/50unattended-upgrades.j2
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        owner: root
+        group: root
+        mode: "0644"
+      when: debian_setup.enable_updates
+
+    - name: Enable unattended upgrades
+      lineinfile:
+        path: /etc/apt/apt.conf.d/20auto-upgrades
+        regexp: "^APT::Periodic::Unattended-Upgrade"
+        line: 'APT::Periodic::Unattended-Upgrade "1";'
+        create: yes
+      when: debian_setup.enable_updates
+
+    # System Health Check
+    - name: Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Display reboot requirement
+      debug:
+        msg: "System reboot is required to complete installation"
+      when: reboot_required.stat.exists
+
+    - name: Perform system reboot if required
+      reboot:
+        msg: "Reboot initiated by Ansible for system updates"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: whoami
+      when:
+        - reboot_required.stat.exists
+        - perform_reboot | default(false)
+
+    # Cleanup
+    - name: Clean package cache
+      apt:
+        autoclean: yes
+        autoremove: yes
+        purge: yes
+
+    - name: Update locate database
+      command: updatedb
+      failed_when: false
+
+  post_tasks:
+    - name: Verify system configuration
+      block:
+        - name: Check SSH service status
+          service:
+            name: ssh
+            state: started
+          register: ssh_status
+
+        - name: Verify user can sudo
+          command: sudo -l -U {{ user_name }}
+          register: sudo_check
+          changed_when: false
+          when: debian_setup.create_user
+
+        - name: Check firewall status
+          command: ufw status
+          register: ufw_status
+          changed_when: false
+          when: debian_setup.setup_firewall
+
+        - name: Display configuration results
+          debug:
+            msg: |
+              Debian Setup Completed Successfully!
+
+              System Information:
+              - Hostname: {{ ansible_hostname }}
+              - Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
+              - Kernel: {{ ansible_kernel }}
+              - Architecture: {{ ansible_architecture }}
+
+              Configuration Results:
+              - SSH Service: {{ 'Running' if ssh_status.state == 'started' else 'Issue detected' }}
+              - User Account: {{ 'Created' if debian_setup.create_user else 'Skipped' }}
+              - Sudo Access: {{ 'Configured' if sudo_check is defined and sudo_check.rc == 0 else 'Check required' }}
+              - Firewall: {{ 'Enabled' if debian_setup.setup_firewall else 'Disabled' }}
+              - Packages Installed: {{ package_install.changed if package_install is defined else 'Skipped' }}
+
+              Next Steps:
+              1. Test SSH connection: ssh -p {{ ssh_port }} {{ user_name }}@{{ ansible_host }}
+              2. Verify sudo access: sudo whoami
+              3. Check system status: systemctl status
+              {% if reboot_required.stat.exists %}
+              4. ⚠️  System reboot recommended for kernel updates
+              {% endif %}
+
+      rescue:
+        - name: Display troubleshooting information
+          debug:
+            msg: |
+              ⚠️  Configuration completed with issues. Please review:
+
+              Common Issues:
+              - SSH key not properly configured: Check copy_pub_key variable
+              - Firewall blocking connections: Verify UFW rules
+              - User creation failed: Check username requirements
+              - Package installation issues: Review apt logs
+
+              Troubleshooting Commands:
+              - Check SSH: systemctl status ssh
+              - View firewall rules: sudo ufw status numbered
+              - Check user: id {{ user_name }}
+              - View logs: journalctl -xe
 
   handlers:
-    - name: Reload SSH
+    - name: restart ssh
       service:
-        name: sshd
+        name: ssh
+        state: restarted
+
+    - name: update hosts file
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ hostname }}"
+
+    - name: reload ufw
+      ufw:
         state: reloaded
+      when: debian_setup.setup_firewall
+
+  tags:
+    - debian
+    - system-init
+    - security
+    - users
+    - ssh
+    - firewall
+    - packages

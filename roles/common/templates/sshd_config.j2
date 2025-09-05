@@ -1,0 +1,173 @@
+# SSH daemon configuration - Managed by Ansible
+# Generated on {{ ansible_date_time.iso8601 }}
+# Platform: {{ ansible_system }} {{ ansible_distribution | default('') }}
+
+# Network Configuration
+Port {{ ssh_config.port | default(ssh_port) | default(22) }}
+{% if ansible_default_ipv4.address is defined %}
+ListenAddress {{ ansible_default_ipv4.address }}
+{% endif %}
+{% if ansible_default_ipv6.address is defined and ansible_default_ipv6.address != "::1" %}
+ListenAddress {{ ansible_default_ipv6.address }}
+{% endif %}
+ListenAddress 127.0.0.1
+{% if ansible_default_ipv6 is defined %}
+ListenAddress ::1
+{% endif %}
+
+# Protocol and Encryption
+Protocol 2
+AddressFamily any
+
+# Host Keys
+{% if ansible_system == 'Linux' %}
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+{% elif ansible_system == 'Darwin' %}
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+{% endif %}
+
+# Ciphers and Algorithms (Modern, Secure)
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512
+KexAlgorithms curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256
+
+# Authentication
+PermitRootLogin {{ ssh_config.permit_root_login | default('no') }}
+PubkeyAuthentication {{ ssh_config.pubkey_authentication | default('yes') }}
+AuthorizedKeysFile .ssh/authorized_keys
+
+# Password Authentication
+PasswordAuthentication {{ ssh_config.password_authentication | default('no') }}
+PermitEmptyPasswords no
+ChallengeResponseAuthentication {{ ssh_config.challenge_response_authentication | default('no') }}
+
+# Kerberos and GSSAPI
+KerberosAuthentication no
+GSSAPIAuthentication no
+GSSAPICleanupCredentials yes
+
+# Connection Settings
+MaxAuthTries {{ ssh_config.max_auth_tries | default(3) }}
+MaxSessions 10
+MaxStartups 10:30:60
+
+# Client Timeout
+ClientAliveInterval {{ ssh_config.client_alive_interval | default(300) }}
+ClientAliveCountMax {{ ssh_config.client_alive_count_max | default(2) }}
+
+# Login Settings
+LoginGraceTime 60
+StrictModes yes
+PermitUserEnvironment no
+
+# Forwarding
+AllowAgentForwarding yes
+AllowTcpForwarding yes
+X11Forwarding {{ 'yes' if ansible_system == 'Linux' and (ansible_env.DISPLAY is defined or desktop_environment | default(false)) else 'no' }}
+X11DisplayOffset 10
+X11UseLocalhost yes
+
+# Tunnel and Gateway
+PermitTunnel no
+GatewayPorts no
+
+# User and Group Restrictions
+{% if init_config is defined and init_config.create_user and user_name is defined %}
+AllowUsers {{ user_name }}
+{% endif %}
+{% if ansible_system == 'Linux' %}
+DenyUsers root
+DenyGroups root
+{% endif %}
+
+# Privilege Separation and Chroot
+UsePrivilegeSeparation {{ 'sandbox' if ansible_distribution == 'Ubuntu' and ansible_distribution_version is version('14.04', '>=') else 'yes' }}
+
+# Logging
+SyslogFacility AUTHPRIV
+LogLevel {{ ssh_config.log_level | default('INFO') }}
+
+# Banner and MOTD
+{% if ssh_banner_file is defined %}
+Banner {{ ssh_banner_file }}
+{% else %}
+Banner none
+{% endif %}
+PrintMotd {{ 'yes' if init_config is defined and init_config.configure_motd else 'no' }}
+PrintLastLog yes
+
+# DNS and Reverse Lookups
+UseDNS no
+
+# Compression
+Compression {{ ssh_config.compression | default('no') }}
+
+# Subsystems
+{% if ansible_system == 'Linux' %}
+{% if ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian' %}
+Subsystem sftp /usr/lib/openssh/sftp-server -f AUTHPRIV -l INFO
+{% elif ansible_distribution in ['CentOS', 'RedHat', 'Fedora'] %}
+Subsystem sftp /usr/libexec/openssh/sftp-server -f AUTHPRIV -l INFO
+{% endif %}
+{% elif ansible_system == 'Darwin' %}
+Subsystem sftp /usr/libexec/sftp-server -f AUTHPRIV -l INFO
+{% endif %}
+
+# Additional Security Settings
+DebianBanner no
+PermitUserRC no
+AcceptEnv LANG LC_*
+
+# Platform-specific configurations
+{% if ansible_system == 'Linux' %}
+# Linux-specific settings
+UsePAM yes
+{% if ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian' %}
+HostKeyAlgorithms rsa-sha2-512,rsa-sha2-256,ssh-rsa,ecdsa-sha2-nistp256,ssh-ed25519
+PubkeyAcceptedKeyTypes rsa-sha2-512,rsa-sha2-256,ssh-rsa,ecdsa-sha2-nistp256,ssh-ed25519
+{% endif %}
+{% elif ansible_system == 'Darwin' %}
+# macOS-specific settings
+UsePAM yes
+{% endif %}
+
+# Router/Embedded specific settings
+{% if is_router is defined and is_router %}
+# Optimized for router environments
+MaxAuthTries 2
+MaxSessions 5
+MaxStartups 5:50:10
+ClientAliveInterval 180
+ClientAliveCountMax 3
+TCPKeepAlive yes
+{% endif %}
+
+# Development environment settings
+{% if setup_dev_environment is defined and setup_dev_environment == 'y' %}
+# Development-friendly settings
+X11Forwarding yes
+AllowTcpForwarding yes
+PermitTunnel yes
+{% endif %}
+
+# Custom configurations
+{% if ssh_custom_config is defined %}
+# Custom SSH configuration
+{{ ssh_custom_config }}
+{% endif %}
+
+# Match conditions for specific users/groups/hosts
+{% if ssh_match_blocks is defined %}
+{% for match_block in ssh_match_blocks %}
+Match {{ match_block.condition }}
+{% for key, value in match_block.settings.items() %}
+    {{ key }} {{ value }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+# End of sshd_config

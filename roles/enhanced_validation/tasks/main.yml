@@ -1,0 +1,272 @@
+---
+# Enhanced Validation Role - Gutter Bonez Infrastructure Automation
+# Uses advanced plugin system for comprehensive validation
+
+- name: Display enhanced validation banner
+  debug:
+    msg: |
+      🔍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🔍
+                            GUTTER BONEZ ENHANCED VALIDATION SUITE
+
+                             Comprehensive Infrastructure Validation
+      🔍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🔍
+
+      Target: {{ inventory_hostname }}
+      Environment: {{ deploy_environment | default('unknown') }}
+      Validation Profile: {{ validation_profile | default('standard') }}
+
+- name: Set validation facts
+  set_fact:
+    validation_timestamp: "{{ ansible_date_time.iso8601 }}"
+    validation_results: {}
+    validation_failed_checks: []
+    validation_warnings: []
+
+- name: Execute network device validation
+  gb_network_validator:
+    device_type: "{{ device_type | default('linux') }}"
+    validation_rules:
+      - connectivity_test
+      - dns_resolution_test
+      - port_accessibility_test
+      - "{{ 'interface_status_check' if device_type | default('') | regex_search('router|switch|firewall') else 'service_status_check' }}"
+      - "{{ 'firewall_rules_check' if ansible_system == 'Linux' else 'configuration_file_validation' }}"
+    timeout: "{{ validation_timeout | default(30) }}"
+    retry_count: "{{ validation_retry_count | default(2) }}"
+    fail_on_error: "{{ fail_on_validation_errors | default(false) }}"
+    output_format: "{{ validation_output_format | default('detailed') }}"
+    save_results: "{{ save_validation_results | default(false) }}"
+    custom_tests: "{{ custom_network_tests | default([]) }}"
+  register: network_validation_result
+  when: perform_network_validation | default(true)
+  tags: ['validation', 'network']
+
+- name: Update validation results with network validation
+  set_fact:
+    validation_results: "{{ validation_results | combine({'network_validation': network_validation_result}) }}"
+  when: network_validation_result is defined
+
+- name: Execute DNS security testing
+  gb_dns_security_tester:
+    dns_server: "{{ dns_server | default(ansible_default_ipv4.address) }}"
+    test_profiles: "{{ dns_test_profiles | default(['basic']) }}"
+    threat_categories: "{{ dns_threat_categories | default(['malware', 'phishing']) }}"
+    security_checks: true
+    performance_tests: "{{ dns_performance_tests | default(true) }}"
+    compliance_tests: "{{ dns_compliance_tests | default(true) }}"
+    timeout: "{{ dns_test_timeout | default(60) }}"
+    concurrent_tests: "{{ dns_concurrent_tests | default(5) }}"
+    fail_on_security_issues: "{{ fail_on_dns_security_issues | default(false) }}"
+    save_results: "{{ save_validation_results | default(false) }}"
+    custom_queries: "{{ custom_dns_queries | default([]) }}"
+  register: dns_security_result
+  when:
+    - perform_dns_validation | default(true)
+    - inventory_hostname in groups.get('dns_servers', []) or test_dns_security | default(false)
+  tags: ['validation', 'dns', 'security']
+
+- name: Update validation results with DNS security testing
+  set_fact:
+    validation_results: "{{ validation_results | combine({'dns_security': dns_security_result}) }}"
+  when: dns_security_result is defined
+
+- name: Execute configuration drift detection
+  gb_config_drift_detector:
+    config_baseline: "{{ config_baseline_path | default(playbook_dir + '/baselines/' + inventory_hostname + '.json') }}"
+    config_paths: "{{ critical_config_files | default([
+        '/etc/ssh/sshd_config',
+        '/etc/systemd/system',
+        '/etc/ctrld',
+        '/etc/hosts',
+        '/etc/resolv.conf'
+      ]) }}"
+    ignore_patterns: "{{ config_ignore_patterns | default([
+        '.*\\.log$',
+        '.*\\.tmp$',
+        '.*timestamp.*',
+        '.*session_id.*'
+      ]) }}"
+    drift_threshold: "{{ drift_threshold | default(5.0) }}"
+    check_permissions: "{{ check_file_permissions | default(true) }}"
+    check_services: "{{ check_service_status | default(true) }}"
+    check_packages: "{{ check_package_drift | default(true) }}"
+    check_network: "{{ check_network_drift | default(true) }}"
+    check_firewall: "{{ check_firewall_drift | default(true) }}"
+    custom_checks: "{{ custom_drift_checks | default([]) }}"
+    generate_remediation: "{{ generate_drift_remediation | default(true) }}"
+    fail_on_drift: "{{ fail_on_config_drift | default(false) }}"
+    save_results: "{{ save_validation_results | default(false) }}"
+    output_format: "{{ validation_output_format | default('detailed') }}"
+  register: config_drift_result
+  when: perform_drift_detection | default(true)
+  tags: ['validation', 'drift', 'configuration']
+
+- name: Update validation results with configuration drift detection
+  set_fact:
+    validation_results: "{{ validation_results | combine({'config_drift': config_drift_result}) }}"
+  when: config_drift_result is defined
+
+- name: Collect validation warnings
+  set_fact:
+    validation_warnings: "{{ validation_warnings + [item] }}"
+  with_items:
+    - "{{ network_validation_result.validation_results.validation_summary.warnings | default([]) }}"
+    - "{{ dns_security_result.dns_security_results.recommendations | default([]) | selectattr('priority', 'equalto', 'medium') | list }}"
+    - "{{ config_drift_result.config_drift_results.recommendations | default([]) | selectattr('priority', 'equalto', 'medium') | list }}"
+  when: item | length > 0
+
+- name: Collect validation failures
+  set_fact:
+    validation_failed_checks: "{{ validation_failed_checks + [item] }}"
+  with_items:
+    - "{{ ['Network validation failed'] if network_validation_result.failed | default(false) else [] }}"
+    - "{{ ['DNS security validation failed'] if dns_security_result.failed | default(false) else [] }}"
+    - "{{ ['Configuration drift detected'] if config_drift_result.failed | default(false) else [] }}"
+
+- name: Execute platform-specific validations
+  include_tasks: "{{ ansible_system | lower }}_validation.yml"
+  when:
+    - perform_platform_validation | default(true)
+    - ansible_system is defined
+  ignore_errors: "{{ ignore_platform_validation_errors | default(true) }}"
+  tags: ['validation', 'platform']
+
+- name: Execute role-specific validations
+  include_tasks: "{{ server_role }}_validation.yml"
+  vars:
+    server_role: "{{ inventory_hostname | regex_replace('-[0-9]+$', '') }}"
+  when:
+    - perform_role_validation | default(true)
+    - server_role is defined
+    - server_role != inventory_hostname
+  ignore_errors: "{{ ignore_role_validation_errors | default(true) }}"
+  tags: ['validation', 'role']
+
+- name: Generate comprehensive validation report
+  set_fact:
+    validation_summary: |
+      🦴━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🦴
+                            GUTTER BONEZ VALIDATION REPORT
+
+      Host: {{ inventory_hostname }}
+      Environment: {{ deploy_environment | default('unknown') }}
+      Timestamp: {{ validation_timestamp }}
+
+      🔍 VALIDATION RESULTS:
+      {% if validation_results.network_validation is defined %}
+      Network Validation: {{ '✅ PASSED' if not network_validation_result.failed else '❌ FAILED' }}
+      {% if validation_results.network_validation.validation_results is defined %}
+      - Total Tests: {{ validation_results.network_validation.validation_results.validation_summary.total_tests | default(0) }}
+      - Passed: {{ validation_results.network_validation.validation_results.validation_summary.passed_tests | default(0) }}
+      - Failed: {{ validation_results.network_validation.validation_results.validation_summary.failed_tests | default(0) }}
+      {% endif %}
+      {% endif %}
+
+      {% if validation_results.dns_security is defined %}
+      DNS Security Testing: {{ '✅ PASSED' if not dns_security_result.failed else '❌ FAILED' }}
+      {% if validation_results.dns_security.dns_security_results is defined %}
+      - Security Score: {{ validation_results.dns_security.dns_security_results.summary.security_score | default(0) }}%
+      - Blocked Threats: {{ validation_results.dns_security.dns_security_results.summary.blocked_threats | default(0) }}
+      - Total Tests: {{ validation_results.dns_security.dns_security_results.summary.total_tests | default(0) }}
+      {% endif %}
+      {% endif %}
+
+      {% if validation_results.config_drift is defined %}
+      Configuration Drift: {{ '✅ COMPLIANT' if not config_drift_result.failed else '⚠️  DRIFT DETECTED' }}
+      {% if validation_results.config_drift.config_drift_results is defined %}
+      - Drift Score: {{ validation_results.config_drift.config_drift_results.drift_summary.drift_score | default(100) }}%
+      - Total Checks: {{ validation_results.config_drift.config_drift_results.drift_summary.total_checks | default(0) }}
+      - Drift Items: {{ validation_results.config_drift.config_drift_results.drift_summary.drift_detected | default(0) }}
+      {% endif %}
+      {% endif %}
+
+      {% if validation_warnings | length > 0 %}
+      ⚠️  WARNINGS ({{ validation_warnings | length }}):
+      {% for warning in validation_warnings %}
+      - {{ warning.message | default(warning) }}
+      {% endfor %}
+      {% endif %}
+
+      {% if validation_failed_checks | length > 0 %}
+      ❌ FAILED CHECKS ({{ validation_failed_checks | length }}):
+      {% for failure in validation_failed_checks %}
+      - {{ failure }}
+      {% endfor %}
+      {% endif %}
+
+      🎯 RECOMMENDATIONS:
+      {% if validation_results.network_validation.validation_results.recommendations is defined %}
+      {% for rec in validation_results.network_validation.validation_results.recommendations %}
+      - [Network] {{ rec.message }}
+      {% endfor %}
+      {% endif %}
+      {% if validation_results.dns_security.dns_security_results.recommendations is defined %}
+      {% for rec in validation_results.dns_security.dns_security_results.recommendations %}
+      - [DNS] {{ rec.message }}
+      {% endfor %}
+      {% endif %}
+      {% if validation_results.config_drift.config_drift_results.recommendations is defined %}
+      {% for rec in validation_results.config_drift.config_drift_results.recommendations %}
+      - [Config] {{ rec.message }}
+      {% endfor %}
+      {% endif %}
+
+      🔧 REMEDIATION ACTIONS:
+      {% if validation_results.config_drift.config_drift_results.remediation_actions is defined %}
+      {% for action in validation_results.config_drift.config_drift_results.remediation_actions %}
+      - [{{ action.priority | upper }}] {{ action.description }}
+        Command: {{ action.command }}
+      {% endfor %}
+      {% endif %}
+
+      🦴━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🦴
+
+      Status: {{ '✅ VALIDATION PASSED' if validation_failed_checks | length == 0 else '❌ VALIDATION ISSUES DETECTED' }}
+
+      Always lots left to do. Nowhere to go but up! 🚀
+
+- name: Display validation summary
+  debug:
+    msg: "{{ validation_summary }}"
+  tags: ['validation', 'summary']
+
+- name: Save validation results to file
+  copy:
+    content: |
+      # Gutter Bonez Validation Results
+      # Generated: {{ validation_timestamp }}
+      # Host: {{ inventory_hostname }}
+
+      {{ validation_results | to_nice_json }}
+    dest: "{{ validation_results_path | default('/tmp') }}/validation_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.json"
+    mode: '0644'
+  when: save_validation_results | default(false)
+  tags: ['validation', 'save']
+
+- name: Send validation alerts
+  debug:
+    msg: "🚨 ALERT: Validation failures detected on {{ inventory_hostname }}. Check validation results for details."
+  when:
+    - validation_failed_checks | length > 0
+    - send_validation_alerts | default(false)
+  tags: ['validation', 'alerts']
+
+- name: Fail if critical validations failed
+  fail:
+    msg: |
+      ❌ CRITICAL VALIDATION FAILURES DETECTED:
+      {{ validation_failed_checks | join('\n') }}
+
+      Review validation results and remediate issues before proceeding.
+  when:
+    - validation_failed_checks | length > 0
+    - fail_on_validation_errors | default(false)
+  tags: ['validation', 'failure']
+
+- name: Set validation facts for other roles
+  set_fact:
+    gutter_bonez_validation_completed: true
+    gutter_bonez_validation_timestamp: "{{ validation_timestamp }}"
+    gutter_bonez_validation_status: "{{ 'passed' if validation_failed_checks | length == 0 else 'failed' }}"
+    gutter_bonez_validation_summary: "{{ validation_summary }}"
+  tags: ['validation', 'facts']

@@ -1,5 +1,214 @@
 ---
-  - name: restart ctrld
-    service:
-      name: ctrld
-      state: restarted
+# Linux systemd handlers
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+  become: yes
+  when: ansible_service_mgr == 'systemd'
+
+- name: restart ctrld
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    state: restarted
+  become: yes
+  when:
+    - ansible_service_mgr == 'systemd'
+    - not is_router | bool
+
+- name: enable ctrld
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+  when:
+    - ansible_service_mgr == 'systemd'
+    - not is_router | bool
+
+- name: start ctrld
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    state: started
+  become: yes
+  when:
+    - ansible_service_mgr == 'systemd'
+    - not is_router | bool
+
+- name: stop ctrld
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    state: stopped
+  become: yes
+  when:
+    - ansible_service_mgr == 'systemd'
+    - not is_router | bool
+
+# macOS launchd handlers
+- name: restart ctrld darwin
+  shell: |
+    launchctl unload /Library/LaunchDaemons/{{ ctrld_service_name }}.plist || true
+    launchctl load /Library/LaunchDaemons/{{ ctrld_service_name }}.plist
+    launchctl start {{ ctrld_service_name }}
+  become: yes
+  when: ansible_system == 'Darwin'
+
+- name: enable ctrld darwin
+  command: launchctl load /Library/LaunchDaemons/{{ ctrld_service_name }}.plist
+  become: yes
+  when: ansible_system == 'Darwin'
+
+- name: start ctrld darwin
+  command: launchctl start {{ ctrld_service_name }}
+  become: yes
+  when: ansible_system == 'Darwin'
+
+- name: stop ctrld darwin
+  command: launchctl stop {{ ctrld_service_name }}
+  become: yes
+  failed_when: false
+  when: ansible_system == 'Darwin'
+
+# Windows service handlers
+- name: restart ctrld windows
+  ansible.windows.win_service:
+    name: "{{ ctrld_service_name }}"
+    state: restarted
+  when: ansible_system == 'Windows'
+
+- name: start ctrld windows
+  ansible.windows.win_service:
+    name: "{{ ctrld_service_name }}"
+    state: started
+  when: ansible_system == 'Windows'
+
+- name: stop ctrld windows
+  ansible.windows.win_service:
+    name: "{{ ctrld_service_name }}"
+    state: stopped
+  when: ansible_system == 'Windows'
+
+# Router-specific handlers
+- name: restart ctrld router
+  shell: |
+    pkill -f ctrld || true
+    sleep 2
+    {{ ctrld_binary_path }} start --cd={{ resolver_id }} >/dev/null 2>&1 &
+  async: 10
+  poll: 0
+  when: is_router | bool
+
+- name: start ctrld router
+  shell: "{{ ctrld_binary_path }} start --cd={{ resolver_id }} >/dev/null 2>&1 &"
+  async: 10
+  poll: 0
+  when: is_router | bool
+
+- name: stop ctrld router
+  shell: pkill -f ctrld || true
+  when: is_router | bool
+  failed_when: false
+
+# OpenWrt specific handlers
+- name: enable ctrld openwrt
+  command: /etc/init.d/ctrld enable
+  when: router_type == 'openwrt'
+
+- name: start ctrld openwrt
+  command: /etc/init.d/ctrld start
+  when: router_type == 'openwrt'
+
+- name: restart ctrld openwrt
+  command: /etc/init.d/ctrld restart
+  when: router_type == 'openwrt'
+
+- name: stop ctrld openwrt
+  command: /etc/init.d/ctrld stop
+  when: router_type == 'openwrt'
+  failed_when: false
+
+# EdgeOS specific handlers
+- name: enable ctrld edgeos
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+  when: router_type == 'edgeos'
+
+- name: start ctrld edgeos
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    state: started
+  become: yes
+  when: router_type == 'edgeos'
+
+- name: restart ctrld edgeos
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    state: restarted
+  become: yes
+  when: router_type == 'edgeos'
+
+- name: stop ctrld edgeos
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    state: stopped
+  become: yes
+  when: router_type == 'edgeos'
+  failed_when: false
+
+# Configuration validation handler
+- name: validate ctrld config
+  command: "{{ ctrld_binary_path }} run --config {{ ctrld_config_file }} --test"
+  register: config_validation
+  failed_when: config_validation.rc != 0
+  when: ctrld_defaults.validate_config | default(true)
+
+# Log rotation handler
+- name: reload logrotate
+  command: logrotate -f /etc/logrotate.d/ctrld
+  become: yes
+  when:
+    - ansible_system == 'Linux'
+    - not is_router | bool
+  failed_when: false
+
+# Network configuration handlers
+- name: flush dns cache
+  shell: |
+    case "{{ ansible_system }}" in
+      "Linux")
+        systemctl restart systemd-resolved 2>/dev/null ||
+        systemctl restart NetworkManager 2>/dev/null ||
+        /etc/init.d/networking restart 2>/dev/null || true
+        ;;
+      "Darwin")
+        dscacheutil -flushcache
+        killall -HUP mDNSResponder
+        ;;
+      "Windows")
+        ipconfig /flushdns
+        ;;
+    esac
+  become: yes
+  failed_when: false
+
+# Health check handler
+- name: verify ctrld health
+  uri:
+    url: "http://127.0.0.1:{{ ctrld_health_port | default(8080) }}/health"
+    method: GET
+    timeout: 10
+  register: health_check
+  failed_when: false
+  when: ctrld_enable_health_check | default(false)
+
+# Backup handler
+- name: backup ctrld config
+  copy:
+    src: "{{ ctrld_config_file }}"
+    dest: "{{ ctrld_config_file }}.backup.{{ ansible_date_time.epoch }}"
+    remote_src: yes
+    backup: yes
+  when: ctrld_defaults.backup_config | default(true)
+  failed_when: false

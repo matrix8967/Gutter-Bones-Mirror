@@ -1,0 +1,81 @@
+{
+  "test_session": {
+    "id": "{{ test_summary.session_id }}",
+    "hostname": "{{ test_summary.hostname }}",
+    "platform": "{{ test_summary.platform }}",
+    "environment": "{{ test_summary.environment }}",
+    "ansible_facts": {
+      "os_family": "{{ ansible_os_family | default('unknown') }}",
+      "distribution": "{{ ansible_distribution | default('unknown') }}",
+      "distribution_version": "{{ ansible_distribution_version | default('unknown') }}",
+      "architecture": "{{ ansible_architecture | default('unknown') }}",
+      "virtualization_type": "{{ ansible_virtualization_type | default('physical') }}",
+      "virtualization_role": "{{ ansible_virtualization_role | default('host') }}",
+      "kernel": "{{ ansible_kernel | default('unknown') }}"
+    },
+    "network_info": {
+      "default_ipv4": "{{ ansible_default_ipv4.address | default('unknown') }}",
+      "default_gateway": "{{ ansible_default_ipv4.gateway | default('unknown') }}",
+      "dns_nameservers": {{ ansible_dns.nameservers | default([]) | to_json }},
+      "interfaces": {{ ansible_interfaces | default([]) | to_json }}
+    },
+    "timing": {
+      "start_time": {{ test_summary.start_time }},
+      "end_time": {{ test_summary.end_time }},
+      "duration_seconds": {{ test_summary.duration }},
+      "start_timestamp": "{{ test_summary.start_time | int | strftime('%Y-%m-%d %H:%M:%S UTC') }}",
+      "end_timestamp": "{{ test_summary.end_time | int | strftime('%Y-%m-%d %H:%M:%S UTC') }}"
+    },
+    "test_statistics": {
+      "total_tests": {{ test_summary.total_tests }},
+      "passed_tests": {{ test_summary.passed_tests }},
+      "failed_tests": {{ test_summary.failed_tests }},
+      "warning_tests": {{ test_summary.warning_tests }},
+      "success_rate": "{{ ((test_summary.passed_tests / test_summary.total_tests) * 100) | round(2) if test_summary.total_tests > 0 else 0 }}%"
+    }
+  },
+  "test_results": [
+{% for result in test_summary.results %}
+    {
+      "test_name": "{{ result.test_name }}",
+      "timestamp": "{{ result.timestamp }}",
+      "hostname": "{{ result.hostname }}",
+      "platform": "{{ result.platform }}",
+      "status": "{{ result.status }}",
+      "details": {{ result.details | to_json }}
+    }{% if not loop.last %},{% endif %}
+{% endfor %}
+  ],
+  "ctrld_environment": {
+    "binary_path": "{{ ctrld_binary_path | default('unknown') }}",
+    "config_file": "{{ ctrld_config_file | default('unknown') }}",
+    "service_name": "{{ ctrld_service_name | default('ctrld') }}",
+    "listeners": {{ ctrld_listeners | default([]) | to_json }},
+    "upstreams": {{ ctrld_upstreams | default([]) | to_json }},
+    "policies": {{ ctrld_policies | default([]) | to_json }}
+  },
+  "system_health": {
+    "memory": {
+      "total_mb": "{{ (ansible_memtotal_mb | default(0)) }}",
+      "free_mb": "{{ (ansible_memfree_mb | default(0)) }}",
+      "available_mb": "{{ (ansible_memory_mb.nocache.free | default(0)) if ansible_memory_mb is defined else 0 }}"
+    },
+    "disk": {
+      "root_total_gb": "{{ (ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | first / 1024 / 1024 / 1024) | round(2) if ansible_mounts is defined and (ansible_mounts | selectattr('mount', 'equalto', '/') | list | length > 0) else 'unknown' }}",
+      "root_available_gb": "{{ (ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first / 1024 / 1024 / 1024) | round(2) if ansible_mounts is defined and (ansible_mounts | selectattr('mount', 'equalto', '/') | list | length > 0) else 'unknown' }}"
+    },
+    "load": {
+      "1min": "{{ ansible_loadavg['1m'] | default('unknown') }}",
+      "5min": "{{ ansible_loadavg['5m'] | default('unknown') }}",
+      "15min": "{{ ansible_loadavg['15m'] | default('unknown') }}"
+    },
+    "uptime_seconds": {{ ansible_uptime_seconds | default(0) }}
+  },
+  "metadata": {
+    "gutter_bonez_version": "{{ gutter_bonez_version | default('dev') }}",
+    "ansible_version": "{{ ansible_version.full }}",
+    "generated_by": "gutter_bonez testing framework",
+    "report_format_version": "1.0",
+    "tags": {{ ansible_run_tags | default([]) | to_json }}
+  }
+}

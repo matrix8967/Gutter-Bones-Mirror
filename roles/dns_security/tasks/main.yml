@@ -1,0 +1,478 @@
+---
+# DNS Security Testing Framework for Gutter Bonez Infrastructure
+# Advanced DNS validation, security testing, and malicious resolution detection
+# Designed for QA testing across diverse network configurations
+
+- name: Initialize DNS security testing session
+  set_fact:
+    dns_security_session_id: "dns-sec-{{ ansible_date_time.epoch }}"
+    dns_security_start_time: "{{ ansible_date_time.epoch }}"
+    dns_test_results: {}
+    dns_security_findings: []
+    dns_baseline_metrics: {}
+    dns_threat_indicators: {}
+
+- name: Create DNS security test results directory
+  file:
+    path: "/tmp/gutter_bonez_dns_security/{{ dns_security_session_id }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  run_once: true
+
+- name: Display DNS security testing plan
+  debug:
+    msg:
+      - "🔍 Starting DNS Security Testing Framework"
+      - "Session ID: {{ dns_security_session_id }}"
+      - "Target Host: {{ inventory_hostname }}"
+      - "Test Categories: {{ dns_security_tests | default(['all']) | join(', ') }}"
+      - "Known Malicious Domains: {{ dns_malicious_domains | length | default(0) }}"
+      - "Control D Integration: {{ dns_controld_integration | default(false) }}"
+
+# ========================================
+# DNS Resolution Baseline & Health Check
+# ========================================
+- name: Establish DNS resolution baseline
+  block:
+    - name: Test DNS resolution to known good domains
+      shell: |
+        domains=("google.com" "cloudflare.com" "github.com" "example.com")
+        resolvers=("{{ ansible_default_ipv4.gateway | default('192.168.1.1') }}" "127.0.0.1" "1.1.1.1" "8.8.8.8")
+
+        for resolver in "${resolvers[@]}"; do
+          echo "=== Testing resolver: $resolver ==="
+          for domain in "${domains[@]}"; do
+            start_time=$(date +%s%N)
+            result=$(dig @$resolver +short +time=3 +tries=1 $domain A 2>/dev/null)
+            end_time=$(date +%s%N)
+            duration=$(( (end_time - start_time) / 1000000 ))
+
+            if [[ -n "$result" ]]; then
+              echo "PASS,$resolver,$domain,$duration,$result"
+            else
+              echo "FAIL,$resolver,$domain,$duration,NO_RESPONSE"
+            fi
+          done
+        done
+      register: dns_baseline_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Parse DNS baseline results
+      set_fact:
+        dns_baseline_metrics:
+          test_time: "{{ ansible_date_time.iso8601 }}"
+          results: "{{ dns_baseline_test.stdout_lines | default([]) }}"
+          total_queries: "{{ dns_baseline_test.stdout_lines | default([]) | length }}"
+          successful_queries: "{{ dns_baseline_test.stdout_lines | default([]) | select('match', '^PASS,.*') | list | length }}"
+          failed_queries: "{{ dns_baseline_test.stdout_lines | default([]) | select('match', '^FAIL,.*') | list | length }}"
+          success_rate: "{{ ((dns_baseline_test.stdout_lines | default([]) | select('match', '^PASS,.*') | list | length) / (dns_baseline_test.stdout_lines | default([]) | length | float * 100)) | round(2) if dns_baseline_test.stdout_lines | default([]) | length > 0 else 0 }}"
+
+# ========================================
+# DNS Poisoning Detection
+# ========================================
+- name: DNS poisoning and cache manipulation detection
+  block:
+    - name: Test for DNS cache poisoning vulnerabilities
+      shell: |
+        # Test for DNS cache poisoning by comparing responses from multiple resolvers
+        test_domains=("{{ dns_poisoning_test_domains | default(['test.com', 'malware.testcategory.com', 'phishing.testcategory.com']) | join('" "') }}")
+        resolvers=("127.0.0.1" "1.1.1.1" "8.8.8.8" "{{ ansible_default_ipv4.gateway | default('192.168.1.1') }}")
+
+        echo "domain,resolver,response,response_time,status"
+        for domain in $test_domains; do
+          responses=()
+          for resolver in "${resolvers[@]}"; do
+            start_time=$(date +%s%N)
+            response=$(dig @$resolver +short +time=2 +tries=1 $domain A 2>/dev/null)
+            end_time=$(date +%s%N)
+            response_time=$(( (end_time - start_time) / 1000000 ))
+
+            if [[ -n "$response" ]]; then
+              echo "$domain,$resolver,$response,$response_time,RESOLVED"
+              responses+=("$response")
+            else
+              echo "$domain,$resolver,NXDOMAIN,$response_time,NXDOMAIN"
+              responses+=("NXDOMAIN")
+            fi
+          done
+
+          # Check for inconsistent responses (potential poisoning)
+          unique_responses=$(printf '%s\n' "${responses[@]}" | sort -u | wc -l)
+          if [[ $unique_responses -gt 2 ]]; then
+            echo "$domain,INCONSISTENT,MULTIPLE_RESPONSES,0,POTENTIAL_POISONING"
+          fi
+        done
+      register: dns_poisoning_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Analyze DNS poisoning test results
+      set_fact:
+        dns_poisoning_results:
+          test_time: "{{ ansible_date_time.iso8601 }}"
+          raw_results: "{{ dns_poisoning_test.stdout_lines | default([]) }}"
+          potential_poisoning: "{{ dns_poisoning_test.stdout_lines | default([]) | select('match', '.*,POTENTIAL_POISONING$') | list }}"
+          inconsistent_domains: "{{ dns_poisoning_test.stdout_lines | default([]) | select('match', '.*,INCONSISTENT,.*') | list | length }}"
+
+# ========================================
+# Malicious Domain Detection
+# ========================================
+- name: Test malicious domain resolution and blocking
+  block:
+    - name: Test resolution of known malicious domains
+      shell: |
+        # Test various categories of malicious domains
+        malicious_domains=("{{ dns_malicious_domains | default([
+          'malware.testcategory.com',
+          'phishing.testcategory.com',
+          'ads.testcategory.com',
+          'tracking.testcategory.com',
+          'cryptomining.testcategory.com'
+        ]) | join('" "') }}")
+
+        resolvers=("127.0.0.1" "{{ ansible_default_ipv4.gateway | default('192.168.1.1') }}")
+
+        echo "domain,resolver,response,blocked,category"
+        for domain in $malicious_domains; do
+          category=$(echo $domain | cut -d'.' -f1)
+          for resolver in "${resolvers[@]}"; do
+            response=$(dig @$resolver +short +time=2 +tries=1 $domain A 2>/dev/null)
+
+            if [[ -z "$response" ]] || [[ "$response" == *"NXDOMAIN"* ]]; then
+              echo "$domain,$resolver,BLOCKED,true,$category"
+            elif [[ "$response" =~ ^0\.0\.0\.0$ ]] || [[ "$response" =~ ^127\.0\.0\.1$ ]]; then
+              echo "$domain,$resolver,SINKHOLE,true,$category"
+            else
+              echo "$domain,$resolver,$response,false,$category"
+            fi
+          done
+        done
+      register: malicious_domain_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Analyze malicious domain blocking effectiveness
+      set_fact:
+        malicious_domain_results:
+          test_time: "{{ ansible_date_time.iso8601 }}"
+          total_domains_tested: "{{ dns_malicious_domains | default([]) | length }}"
+          blocked_domains: "{{ malicious_domain_test.stdout_lines | default([]) | select('match', '.*,true,.*') | list | length }}"
+          unblocked_domains: "{{ malicious_domain_test.stdout_lines | default([]) | select('match', '.*,false,.*') | list | length }}"
+          blocking_effectiveness: "{{ ((malicious_domain_test.stdout_lines | default([]) | select('match', '.*,true,.*') | list | length) / (dns_malicious_domains | default([]) | length | float) * 100) | round(2) if dns_malicious_domains | default([]) | length > 0 else 0 }}"
+          unblocked_threats: "{{ malicious_domain_test.stdout_lines | default([]) | select('match', '.*,false,.*') | list }}"
+
+# ========================================
+# HTTPS Interception Detection
+# ========================================
+- name: HTTPS interception and captive portal detection
+  block:
+    - name: Test for HTTPS interception
+      shell: |
+        # Test for HTTPS interception by examining certificate chains
+        test_domains=("google.com" "github.com" "cloudflare.com")
+
+        echo "domain,port,cert_issuer,cert_subject,interception_detected"
+        for domain in "${test_domains[@]}"; do
+          cert_info=$(echo | timeout 5 openssl s_client -servername $domain -connect $domain:443 2>/dev/null | openssl x509 -noout -issuer -subject 2>/dev/null)
+
+          if [[ -n "$cert_info" ]]; then
+            issuer=$(echo "$cert_info" | grep "issuer=" | cut -d'=' -f2-)
+            subject=$(echo "$cert_info" | grep "subject=" | cut -d'=' -f2-)
+
+            # Check for common captive portal/interception indicators
+            if echo "$issuer" | grep -qi "captive\|portal\|firewall\|untrusted\|self-signed"; then
+              echo "$domain,443,$issuer,$subject,true"
+            else
+              echo "$domain,443,$issuer,$subject,false"
+            fi
+          else
+            echo "$domain,443,CONNECTION_FAILED,,unknown"
+          fi
+        done
+      register: https_interception_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Detect captive portal presence
+      shell: |
+        # Test for captive portal by attempting HTTP requests to known endpoints
+        test_urls=(
+          "http://detectportal.firefox.com/canonical.html"
+          "http://connectivitycheck.gstatic.com/generate_204"
+          "http://www.msftconnecttest.com/connecttest.txt"
+        )
+
+        echo "url,expected_response,actual_response,captive_portal_detected"
+        for url in "${test_urls[@]}"; do
+          response=$(timeout 10 curl -s --max-time 5 --connect-timeout 3 "$url" 2>/dev/null | head -c 100)
+          http_code=$(timeout 10 curl -s --max-time 5 --connect-timeout 3 -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)
+
+          case "$url" in
+            *firefox*)
+              expected="success"
+              if [[ "$response" == "success" ]] && [[ "$http_code" == "200" ]]; then
+                echo "$url,$expected,$response,false"
+              else
+                echo "$url,$expected,$response,true"
+              fi
+              ;;
+            *gstatic*)
+              if [[ "$http_code" == "204" ]]; then
+                echo "$url,204,$http_code,false"
+              else
+                echo "$url,204,$http_code,true"
+              fi
+              ;;
+            *msft*)
+              expected="Microsoft Connect Test"
+              if echo "$response" | grep -q "Microsoft"; then
+                echo "$url,$expected,$response,false"
+              else
+                echo "$url,$expected,$response,true"
+              fi
+              ;;
+          esac
+        done
+      register: captive_portal_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+# ========================================
+# DNS-over-HTTPS (DoH) and DNS-over-TLS (DoT) Testing
+# ========================================
+- name: Test secure DNS protocols (DoH/DoT)
+  block:
+    - name: Test DNS-over-HTTPS functionality
+      shell: |
+        # Test DoH endpoints
+        doh_providers=(
+          "https://cloudflare-dns.com/dns-query"
+          "https://dns.google/dns-query"
+          "https://security.cloudflare-dns.com/dns-query"
+        )
+
+        echo "provider,domain,response,response_time,status"
+        for provider in "${doh_providers[@]}"; do
+          provider_name=$(echo $provider | cut -d'/' -f3 | cut -d'.' -f1)
+          start_time=$(date +%s%N)
+
+          response=$(timeout 10 curl -s --max-time 5 \
+            -H "accept: application/dns-json" \
+            "$provider?name=example.com&type=A" 2>/dev/null)
+
+          end_time=$(date +%s%N)
+          response_time=$(( (end_time - start_time) / 1000000 ))
+
+          if echo "$response" | grep -q "Answer"; then
+            ip=$(echo "$response" | grep -o '"data":"[0-9.]*"' | cut -d'"' -f4 | head -1)
+            echo "$provider_name,example.com,$ip,$response_time,SUCCESS"
+          else
+            echo "$provider_name,example.com,FAILED,$response_time,ERROR"
+          fi
+        done
+      register: doh_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Test DNS-over-TLS functionality
+      shell: |
+        # Test DoT using dig with TLS
+        dot_providers=(
+          "cloudflare-dns.com"
+          "dns.google"
+          "one.one.one.one"
+        )
+
+        echo "provider,domain,response,response_time,status"
+        for provider in "${dot_providers[@]}"; do
+          start_time=$(date +%s%N)
+
+          if command -v kdig >/dev/null 2>&1; then
+            response=$(timeout 10 kdig +tls @$provider example.com A +short 2>/dev/null)
+          else
+            # Fallback using openssl for basic TLS connectivity test
+            response=$(timeout 10 echo | openssl s_client -connect $provider:853 2>/dev/null | grep "Verify return code" | cut -d' ' -f4)
+          fi
+
+          end_time=$(date +%s%N)
+          response_time=$(( (end_time - start_time) / 1000000 ))
+
+          if [[ -n "$response" ]] && [[ "$response" != "0" ]]; then
+            echo "$provider,example.com,$response,$response_time,SUCCESS"
+          else
+            echo "$provider,example.com,FAILED,$response_time,ERROR"
+          fi
+        done
+      register: dot_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+# ========================================
+# Control D Integration Testing
+# ========================================
+- name: Control D DNS service validation
+  block:
+    - name: Test Control D endpoint resolution
+      uri:
+        url: "https://verify.controld.com"
+        method: GET
+        timeout: 10
+        return_content: yes
+      register: controld_verify_test
+      failed_when: false
+      when: dns_controld_integration | default(true)
+
+    - name: Parse Control D verification response
+      set_fact:
+        controld_status:
+          accessible: "{{ controld_verify_test.status == 200 if controld_verify_test.status is defined else false }}"
+          response_time: "{{ controld_verify_test.elapsed | default(0) }}"
+          dns_server: "{{ (controld_verify_test.content | regex_search('DNS Server: ([0-9.]+)', '\\1')) | default(['unknown']) | first | default('unknown') }}"
+          location: "{{ (controld_verify_test.content | regex_search('Location: ([^\\n]+)', '\\1')) | default(['unknown']) | first | default('unknown') }}"
+          status_content: "{{ controld_verify_test.content | default('') | truncate(200) }}"
+      when:
+        - dns_controld_integration | default(true)
+        - controld_verify_test is defined
+
+    - name: Test ctrld service integration
+      shell: |
+        if systemctl is-active ctrld >/dev/null 2>&1; then
+          echo "status=active"
+          echo "uptime=$(systemctl show ctrld -p ActiveEnterTimestamp --value | xargs -I {} date -d "{}" +%s)"
+          echo "memory=$(systemctl show ctrld -p MemoryCurrent --value)"
+          echo "restart_count=$(systemctl show ctrld -p NRestarts --value)"
+        else
+          echo "status=inactive"
+        fi
+
+        # Test ctrld configuration
+        if [[ -f /etc/ctrld/ctrld.toml ]]; then
+          echo "config_exists=true"
+          echo "config_size=$(stat -f%z /etc/ctrld/ctrld.toml 2>/dev/null || stat -c%s /etc/ctrld/ctrld.toml)"
+        else
+          echo "config_exists=false"
+        fi
+      register: ctrld_integration_test
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - dns_contrld_integration | default(true)
+  when: dns_contrld_integration | default(false)
+
+# ========================================
+# DNS Performance and Latency Analysis
+# ========================================
+- name: DNS performance and latency analysis
+  block:
+    - name: Simple DNS response time testing
+      shell: |
+        echo "resolver,domain,response_time_ms,status"
+        for resolver in 127.0.0.1 1.1.1.1 8.8.8.8; do
+          for domain in google.com cloudflare.com; do
+            start_time=$(date +%s%N)
+            if dig @$resolver +short +time=3 +tries=1 $domain A >/dev/null 2>&1; then
+              end_time=$(date +%s%N)
+              response_time=$(( (end_time - start_time) / 1000000 ))
+              echo "$resolver,$domain,$response_time,SUCCESS"
+            else
+              echo "$resolver,$domain,0,FAILED"
+            fi
+          done
+        done
+      register: dns_performance_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+# ========================================
+# Compile and Generate Security Report
+# ========================================
+- name: Calculate test duration
+  set_fact:
+    dns_test_duration: "{{ ((ansible_date_time.epoch | int) - (dns_security_start_time | int)) }}"
+
+- name: Compile baseline health summary
+  set_fact:
+    baseline_summary:
+      success_rate: "{{ dns_baseline_metrics.success_rate | default(0) }}"
+      total_queries: "{{ dns_baseline_metrics.total_queries | default(0) }}"
+      failed_queries: "{{ dns_baseline_metrics.failed_queries | default(0) }}"
+
+- name: Compile security findings summary
+  set_fact:
+    security_findings_summary:
+      dns_poisoning_incidents: "{{ dns_poisoning_results.potential_poisoning | default([]) | length }}"
+      malicious_blocking_rate: "{{ malicious_domain_results.blocking_effectiveness | default(0) }}"
+      https_interception: "{{ https_interception_test.stdout_lines | default([]) | select('match', '.*,true$') | list | length > 0 }}"
+      captive_portal: "{{ captive_portal_test.stdout_lines | default([]) | select('match', '.*,true$') | list | length > 0 }}"
+
+- name: Compile performance summary
+  set_fact:
+    performance_summary:
+      total_queries: "{{ dns_performance_test.stdout_lines | default([]) | length }}"
+      successful_queries: "{{ dns_performance_test.stdout_lines | default([]) | select('match', '.*,SUCCESS$') | list | length }}"
+
+- name: Compile DNS security test results
+  set_fact:
+    dns_security_summary:
+      session_id: "{{ dns_security_session_id }}"
+      hostname: "{{ inventory_hostname }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      test_duration: "{{ dns_test_duration }}"
+      baseline_health: "{{ baseline_summary }}"
+      security_findings: "{{ security_findings_summary }}"
+      performance_metrics: "{{ performance_summary }}"
+      controld_integration:
+        service_accessible: "{{ controld_status.accessible | default(false) }}"
+        ctrld_active: false
+        dns_server: "{{ controld_status.dns_server | default('unknown') }}"
+
+- name: Generate DNS security report
+  template:
+    src: dns_security_report.j2
+    dest: "/tmp/gutter_bonez_dns_security/{{ dns_security_session_id }}/dns_security_report.html"
+    mode: "0644"
+  delegate_to: localhost
+
+- name: Generate DNS security JSON report
+  copy:
+    content: "{{ dns_security_summary | to_nice_json(indent=2) }}"
+    dest: "/tmp/gutter_bonez_dns_security/{{ dns_security_session_id }}/dns_security_results.json"
+    mode: "0644"
+  delegate_to: localhost
+
+- name: Display DNS security testing summary
+  debug:
+    msg:
+      - "🔍 DNS Security Testing Complete"
+      - "📊 Session: {{ dns_security_session_id }}"
+      - "⏱️  Duration: {{ dns_security_summary.test_duration }}s"
+      - "🎯 Baseline Success Rate: {{ dns_security_summary.baseline_health.success_rate }}%"
+      - "🛡️  Malicious Blocking: {{ dns_security_summary.security_findings.malicious_blocking_rate }}%"
+      - "🔒 HTTPS Interception: {{ 'DETECTED' if dns_security_summary.security_findings.https_interception else 'NOT DETECTED' }}"
+      - "🌐 Captive Portal: {{ 'PRESENT' if dns_security_summary.security_findings.captive_portal else 'NOT PRESENT' }}"
+      - "📈 Performance: {{ dns_security_summary.performance_metrics.successful_queries }}/{{ dns_security_summary.performance_metrics.total_queries }} queries successful"
+      - "🎛️  Control D Service: {{ 'ACTIVE' if dns_security_summary.controld_integration.ctrld_active else 'INACTIVE' }}"
+      - "📄 Report: /tmp/gutter_bonez_dns_security/{{ dns_security_session_id }}/dns_security_report.html"
+
+- name: Alert on critical security findings
+  debug:
+    msg: |
+      🚨 DNS SECURITY ISSUES DETECTED:
+      - DNS Poisoning: {{ dns_security_summary.security_findings.dns_poisoning_incidents | default(0) }} incidents
+      - Malicious Blocking: {{ dns_security_summary.security_findings.malicious_blocking_rate | default(0) }}% effectiveness
+      - HTTPS Interception: {{ 'DETECTED' if dns_security_summary.security_findings.https_interception | default(false) else 'NOT DETECTED' }}
+      - DNS Success Rate: {{ dns_security_summary.baseline_health.success_rate | default(0) }}%
+
+      📄 Full Report: /tmp/gutter_bonez_dns_security/{{ dns_security_session_id }}/dns_security_report.html
+  when: dns_security_fail_on_critical | default(false)

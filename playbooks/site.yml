@@ -1,0 +1,459 @@
+---
+# Gutter Bonez Site Playbook - Master orchestration for all infrastructure
+# This playbook provides a unified entry point for managing diverse infrastructure
+# Supports Linux, Windows, macOS, routers, and network devices
+
+- name: Gutter Bonez Infrastructure Orchestration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    # Orchestration configuration
+    orchestration:
+      parallel_execution: true
+      fail_fast: false
+      pre_flight_checks: true
+      post_deployment_verification: true
+      backup_configurations: true
+
+    # Deployment phases
+    deployment_phases:
+      - phase: "infrastructure_discovery"
+        description: "Discover and categorize target systems"
+        enabled: true
+      - phase: "system_initialization"
+        description: "Initialize and configure base systems"
+        enabled: true
+      - phase: "security_hardening"
+        description: "Apply security baselines"
+        enabled: true
+      - phase: "service_deployment"
+        description: "Deploy applications and services"
+        enabled: true
+      - phase: "network_configuration"
+        description: "Configure network devices and routing"
+        enabled: true
+      - phase: "monitoring_setup"
+        description: "Deploy monitoring and observability"
+        enabled: false
+      - phase: "dns_security_testing"
+        description: "DNS security and threat detection testing"
+        enabled: false
+      - phase: "verification"
+        description: "Verify deployment success"
+        enabled: true
+
+  pre_tasks:
+    - name: Display orchestration banner
+      debug:
+        msg: |
+          🦴━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🦴
+                              GUTTER BONEZ INFRASTRUCTURE ORCHESTRATION
+
+                               Skeleton Scripts. Nowhere to go but up.
+          🦴━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🦴
+
+          Deployment Configuration:
+          - Execution Mode: {{ 'Parallel' if orchestration.parallel_execution else 'Serial' }}
+          - Fail Fast: {{ orchestration.fail_fast }}
+          - Pre-flight Checks: {{ orchestration.pre_flight_checks }}
+          - Backup Configs: {{ orchestration.backup_configurations }}
+
+    - name: Validate inventory and connectivity
+      block:
+        - name: Check inventory file exists
+          stat:
+            path: "{{ inventory_file }}"
+          register: inventory_check
+          when: inventory_file is defined
+
+        - name: Discover target hosts
+          setup:
+          delegate_to: "{{ item }}"
+          with_items: "{{ groups['all'] | default([]) }}"
+          when: orchestration.pre_flight_checks
+          run_once: true
+          ignore_errors: true
+
+      rescue:
+        - name: Display connectivity issues
+          debug:
+            msg: |
+              ⚠️  Pre-flight checks found connectivity issues.
+              Continuing with available hosts...
+
+# Phase 1: Infrastructure Discovery and Categorization
+- name: "Phase 1: Infrastructure Discovery"
+  hosts: all
+  gather_facts: true
+  serial: "{{ '100%' if orchestration.parallel_execution else 1 }}"
+  vars:
+    discovery_enabled: "{{ deployment_phases | selectattr('phase', 'equalto', 'infrastructure_discovery') | selectattr('enabled', 'equalto', true) | list | length > 0 }}"
+
+  tasks:
+    - name: Categorize systems by platform
+      set_fact:
+        platform_category: "{{ 'linux' if ansible_system == 'Linux'
+          else 'windows' if ansible_system == 'Windows'
+          else 'darwin' if ansible_system == 'Darwin'
+          else 'router' if ansible_hostname is match('^(RT-|GT-|AX|R[0-9]+|WRT)') or ansible_board is defined
+          else 'unknown' }}"
+        system_role:
+          "{{ 'workstation' if inventory_hostname in groups.get('workstations', [])
+          else 'server' if inventory_hostname in groups.get('servers', [])
+          else 'router' if inventory_hostname in groups.get('routers', [])
+          else 'development' if inventory_hostname in groups.get('development', [])
+          else 'generic' }}"
+      when: discovery_enabled
+
+    - name: Display discovered system information
+      debug:
+        msg: |
+          System Discovery:
+          - Host: {{ inventory_hostname }}
+          - Platform: {{ ansible_system | default('Unknown') }}
+          - Distribution: {{ ansible_distribution | default('N/A') }} {{ ansible_distribution_version | default('') }}
+          - Architecture: {{ ansible_architecture | default('N/A') }}
+          - Category: {{ platform_category | default('unknown') }}
+          - Role: {{ system_role | default('generic') }}
+      when: discovery_enabled
+
+  tags: ["discovery", "phase1"]
+
+# Phase 2: System Initialization (Linux Systems)
+- name: "Phase 2a: Linux System Initialization"
+  import_playbook: Init.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'system_initialization') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'linux_systems' in group_names or 'servers' in group_names or 'workstations' in group_names"
+  tags: ["initialization", "linux", "phase2"]
+
+# Phase 2b: Debian/Ubuntu Specific Setup
+- name: "Phase 2b: Debian/Ubuntu System Setup"
+  import_playbook: Debian.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'system_initialization') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'debian_systems' in group_names or ansible_os_family == 'Debian'"
+  tags: ["initialization", "debian", "phase2"]
+
+# Phase 2c: RHEL/Fedora/CentOS Setup
+- name: "Phase 2c: RHEL Family System Setup"
+  import_playbook: RHEL.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'system_initialization') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'rhel_systems' in group_names or ansible_os_family == 'RedHat'"
+  tags: ["initialization", "rhel", "phase2"]
+
+# Phase 2d: macOS Setup
+- name: "Phase 2d: macOS System Setup"
+  import_playbook: Darwin.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'system_initialization') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'darwin_systems' in group_names or ansible_system == 'Darwin'"
+  tags: ["initialization", "darwin", "phase2"]
+
+# Phase 2e: Windows Setup
+- name: "Phase 2e: Windows System Setup"
+  import_playbook: Windows.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'system_initialization') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'windows_systems' in group_names or ansible_system == 'Windows'"
+  tags: ["initialization", "windows", "phase2"]
+
+# Phase 3: Enhanced Validation and Security Hardening
+- name: "Phase 3a: Enhanced Infrastructure Validation"
+  hosts: all
+  gather_facts: false
+  serial: "{{ '100%' if orchestration.parallel_execution else 1 }}"
+  vars:
+    validation_enabled: "{{ deployment_phases | selectattr('phase', 'equalto', 'security_hardening') | selectattr('enabled', 'equalto', true) | list | length > 0 }}"
+
+  roles:
+    - role: enhanced_validation
+      when:
+        - validation_enabled
+        - perform_enhanced_validation | default(true)
+      vars:
+        validation_profile: "{{ security_validation_profile | default('standard') }}"
+        perform_network_validation: true
+        perform_dns_validation: "{{ inventory_hostname in groups.get('dns_servers', []) or test_dns_security | default(false) }}"
+        perform_drift_detection: true
+        fail_on_validation_errors: "{{ fail_on_security_validation | default(false) }}"
+        save_validation_results: "{{ save_security_validation_results | default(true) }}"
+
+  tags: ["validation", "security", "phase3"]
+
+- name: "Phase 3b: Security Baseline Implementation"
+  import_playbook: Firewall.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'security_hardening') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - ansible_system in ['Linux', 'Darwin', 'Windows']
+  tags: ["security", "firewall", "phase3"]
+
+# Phase 4: Service Deployment
+
+# Phase 4a: DNS Services (Control-D ctrld)
+- name: "Phase 4a: DNS Service Deployment (ctrld)"
+  import_playbook: install_ctrld.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'service_deployment') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'dns_servers' in group_names or deploy_dns_services | default(false)"
+  tags: ["services", "dns", "ctrld", "phase4"]
+
+# Phase 4b: Custom DNS Configuration
+- name: "Phase 4b: Advanced DNS Configuration"
+  import_playbook: install_ctrld_custom_config.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'service_deployment') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'dns_servers' in group_names and custom_dns_config | default(false)"
+  tags: ["services", "dns", "custom", "phase4"]
+
+# Phase 4c: Package Management and Updates
+- name: "Phase 4c: Package Management"
+  import_playbook: RPMs.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'service_deployment') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - ansible_os_family == 'RedHat'
+  tags: ["services", "packages", "phase4"]
+
+# Phase 4d: System Updates
+- name: "Phase 4d: System Updates and Maintenance"
+  import_playbook: Upgrade.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'service_deployment') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - perform_system_updates | default(false)
+  tags: ["services", "updates", "maintenance", "phase4"]
+
+# Phase 5: Network Device Configuration
+
+# Phase 5a: ASUSWRT-Merlin Routers
+- name: "Phase 5a: ASUSWRT-Merlin Router Configuration"
+  import_playbook: Asus_Merlin.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'network_configuration') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'asuswrt_merlin' in group_names or 'routers' in group_names"
+  tags: ["network", "routers", "asuswrt", "phase5"]
+
+# Phase 5b: EdgeOS/VyOS Routers
+- name: "Phase 5b: EdgeOS Router Configuration"
+  import_playbook: EdgeOS.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'network_configuration') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'edgeos' in group_names or 'edgerouters' in group_names"
+  tags: ["network", "routers", "edgeos", "phase5"]
+
+# Phase 5c: MikroTik RouterOS
+- name: "Phase 5c: MikroTik Router Configuration"
+  import_playbook: MikroTik.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'network_configuration') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - "'mikrotik' in group_names"
+  tags: ["network", "routers", "mikrotik", "phase5"]
+
+# Phase 6: Observability and Monitoring Setup
+- name: "Phase 6a: Observability Infrastructure Deployment"
+  hosts: all
+  gather_facts: false
+  serial: "{{ '100%' if orchestration.parallel_execution else 1 }}"
+  vars:
+    observability_enabled: "{{ deployment_phases | selectattr('phase', 'equalto', 'monitoring_setup') | selectattr('enabled', 'equalto', true) | list | length > 0 }}"
+
+  roles:
+    - role: observability
+      when:
+        - observability_enabled or deploy_observability | default(false)
+      vars:
+        monitoring_profile: "{{ system_monitoring_profile | default('standard') }}"
+        enable_automated_monitoring: true
+        save_validation_results: true
+        critical_services: "{{ monitoring_critical_services | default(['ssh', 'ctrld', 'systemd-resolved']) }}"
+        critical_ports: "{{ monitoring_critical_ports | default([22, 53, 80, 443]) }}"
+
+  tags: ["monitoring", "observability", "phase6"]
+
+- name: "Phase 6b: DNS Security and Threat Detection Testing"
+  import_playbook: dns_security_testing.yml
+  when:
+    - deployment_phases | selectattr('phase', 'equalto', 'dns_security_testing') | selectattr('enabled', 'equalto', true) | list | length > 0
+    - dns_security_testing | default(false)
+  tags: ["security", "dns", "testing", "validation", "phase6"]
+
+# Phase 7: Configuration Management
+- name: "Phase 7: Dotfiles and Personal Configuration"
+  import_playbook: Dots.yml
+  when:
+    - "'workstations' in group_names or 'development' in group_names"
+    - setup_dotfiles | default(true)
+  tags: ["configuration", "dotfiles", "personal", "phase7"]
+
+# Phase 8: Verification and Validation
+- name: "Phase 8: Enhanced Deployment Verification"
+  hosts: all
+  gather_facts: false
+  serial: "{{ '100%' if orchestration.parallel_execution else 1 }}"
+  vars:
+    verification_enabled: "{{ deployment_phases | selectattr('phase', 'equalto', 'verification') | selectattr('enabled', 'equalto', true) | list | length > 0 }}"
+
+  tasks:
+    - name: Run post-deployment health checks
+      block:
+        - name: Check system uptime
+          command: uptime
+          register: uptime_check
+          changed_when: false
+          failed_when: false
+
+        - name: Verify SSH connectivity
+          wait_for:
+            host: "{{ ansible_host | default(inventory_hostname) }}"
+            port: "{{ ssh_port | default(22) }}"
+            timeout: 10
+          delegate_to: localhost
+          when: ansible_connection != 'local'
+
+        - name: Check critical services (Linux)
+          service:
+            name: "{{ item }}"
+          register: service_check
+          with_items:
+            - ssh
+            - ctrld
+          failed_when: false
+          when: ansible_system == 'Linux'
+
+        - name: Verify DNS resolution (if ctrld deployed)
+          command: "dig @127.0.0.1 verify.controld.com +short +time=5"
+          register: dns_check
+          changed_when: false
+          failed_when: false
+          when: "'dns_servers' in group_names"
+
+        - name: Run enhanced post-deployment validation
+          gb_network_validator:
+            device_type: "{{ device_type | default('linux') }}"
+            validation_rules:
+              - connectivity_test
+              - dns_resolution_test
+              - port_accessibility_test
+              - service_status_check
+            timeout: 30
+            fail_on_error: false
+            output_format: summary
+          register: final_validation_result
+          when: verification_enabled
+
+        - name: Display enhanced verification results
+          debug:
+            msg: |
+              ✅ Enhanced Verification Results for {{ inventory_hostname }}:
+              - System Status: {{ 'Online' if uptime_check.rc == 0 else 'Issue detected' }}
+              - SSH Access: {{ 'Available' if ansible_connection == 'local' or uptime_check is succeeded else 'Check required' }}
+              {% if service_check is defined %}
+              - Services: {{ service_check.results | selectattr('state', 'defined') | selectattr('state', 'equalto', 'started') | list | length }} running
+              {% endif %}
+              {% if dns_check is defined and dns_check.rc == 0 %}
+              - DNS Resolution: Working ({{ dns_check.stdout }})
+              {% endif %}
+              {% if final_validation_result is defined and not final_validation_result.failed %}
+              - Enhanced Validation: {{ final_validation_result.msg }}
+              {% endif %}
+              {% if gutter_bonez_observability_enabled | default(false) %}
+              - Monitoring: Dashboard available at {{ gutter_bonez_dashboard_url | default('N/A') }}
+              {% endif %}
+
+      rescue:
+        - name: Display verification failures
+          debug:
+            msg: |
+              ⚠️  Verification issues detected on {{ inventory_hostname }}:
+              - Check system connectivity and service status
+              - Review deployment logs for errors
+              - Verify configuration files
+
+      when: verification_enabled
+
+  tags: ["verification", "health-check", "phase8"]
+
+# Final Summary Report
+- name: "Deployment Summary Report"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Generate deployment summary
+      debug:
+        msg: |
+          🎉 GUTTER BONEZ DEPLOYMENT COMPLETE! 🎉
+
+          📊 Deployment Statistics:
+          - Total Hosts: {{ groups['all'] | length }}
+          - Linux Systems: {{ groups.get('linux_systems', []) | length + groups.get('servers', []) | length + groups.get('workstations', []) | length }}
+          - Windows Systems: {{ groups.get('windows_systems', []) | length }}
+          - Network Devices: {{ groups.get('routers', []) | length }}
+          - Development Environments: {{ groups.get('development', []) | length }}
+          - Monitoring Enabled: {{ groups['all'] | select('extract', hostvars, 'gutter_bonez_observability_enabled') | select('equalto', true) | list | length }} hosts
+
+          🏗️ Deployed Components:
+          {% for phase in deployment_phases %}
+          {% if phase.enabled %}
+          ✅ {{ phase.description }}
+          {% else %}
+          ⏭️  {{ phase.description }} (Skipped)
+          {% endif %}
+          {% endfor %}
+
+          🔍 Security Testing:
+          {% if deployment_phases | selectattr('phase', 'equalto', 'dns_security_testing') | selectattr('enabled', 'equalto', true) | list | length > 0 %}
+          ✅ DNS Security Testing Enabled
+          {% else %}
+          ⏭️  DNS Security Testing (Optional - use --extra-vars "dns_security_testing=true")
+          {% endif %}
+
+          🔧 Next Steps:
+          1. Verify SSH access to all systems
+          2. Test deployed services (DNS, firewall, etc.)
+          3. Run DNS security testing: --extra-vars "dns_security_testing=true"
+          4. Review system logs for any issues
+          5. Update inventory with any changes
+          6. Document any manual configuration required
+          7. Access monitoring dashboards for observability
+          8. Review validation reports and remediate any issues
+          9. Set up alerting integrations (email, Slack, etc.)
+
+          📚 Troubleshooting:
+          - View deployment logs: ansible-playbook site.yml -v
+          - Check individual host status: ansible all -m ping
+          - Verify service status: ansible all -m service -a "name=ctrld"
+          - Review firewall rules: ansible all -m shell -a "ufw status"
+          - DNS security testing: ansible-playbook dns_security_testing.yml
+          - Enhanced validation: ansible-playbook site.yml -t validation
+          - View monitoring dashboard: /opt/gutter_bonez/monitoring/dashboard.html
+          - Check system health: /opt/gutter_bonez/monitoring/health_check.sh
+          - Review metrics: ls /opt/gutter_bonez/metrics/
+
+          🦴 Always lots left todo. Nowhere to go but up! 🦴
+
+      run_once: true
+
+    - name: Save deployment report
+      copy:
+        content: |
+          Gutter Bonez Deployment Report
+          Generated: {{ ansible_date_time.iso8601 }}
+
+          Summary:
+          - Total Hosts Processed: {{ groups['all'] | length }}
+          - Deployment Duration: {{ ansible_date_time.iso8601 }}
+          - Configuration: {{ inventory_file | default('N/A') }}
+
+          Phases Executed:
+          {% for phase in deployment_phases %}
+          - {{ phase.phase }}: {{ 'Enabled' if phase.enabled else 'Disabled' }}
+          {% endfor %}
+
+          For detailed logs, run: ansible-playbook site.yml -v
+        dest: "./deployment_report_{{ ansible_date_time.epoch }}.txt"
+      run_once: true
+
+  tags: ["summary", "report"]

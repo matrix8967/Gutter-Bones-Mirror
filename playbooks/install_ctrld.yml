@@ -1,38 +1,143 @@
 ---
-- name: Install and configure ctrld
+- name: Install and configure Control-D ctrld DNS proxy
   hosts: all
   become: true
-  vars_files:
-      - ../group_vars/ctrld.yml
-  tasks:
-    - name: Ensure curl is installed
-      package:
-        name: curl
-        state: present
+  gather_facts: true
+  vars:
+    # Default configuration - can be overridden in inventory or group_vars
+    ctrld_listeners:
+      "0":
+        ip: "127.0.0.1"
+        port: 53
+        restricted: false
+        allow_wan_clients: false
+        policy_name: "Main Policy"
+        networks:
+          - network.0: ["upstream.0"]
+        rules:
+          - "*.local": ["upstream.local"]
+          - "*.lan": ["upstream.local"]
+          - "captive.apple.com": []
+          - "detectportal.firefox.com": []
+          - "neverssl.com": []
 
-    - name: Download the ctrld installer script
-      get_url:
-        url: https://api.controld.com/dl
-        dest: /usr/local/bin/ctrld_installer.sh
-        mode: '0755'
+    ctrld_networks:
+      "0":
+        name: "All Networks"
+        cidrs: ["0.0.0.0/0"]
 
-    - name: Run the ctrld installer script
-      shell: |
-        set -x
-        /usr/local/bin/ctrld_installer.sh {{ resolver_id }} forced
-      register: install_output
-      ignore_errors: yes
+    ctrld_upstreams:
+      "0":
+        name: "Control D - Anti-Malware"
+        type: "doh"
+        endpoint: "https://freedns.controld.com/p1"
+        bootstrap_ip: "76.76.2.11"
+        timeout: 5000
+        ip_stack: "split"
+      "1":
+        name: "Control D - No Ads"
+        type: "doq"
+        endpoint: "p2.freedns.controld.com"
+        bootstrap_ip: "76.76.2.11"
+        timeout: 3000
+        ip_stack: "split"
+      "local":
+        name: "Local DNS"
+        type: "os"
+        timeout: 2000
+        discoverable: true
 
-    - name: Debug ctrld installer script output
+    # Service configuration
+    ctrld_cache_enable: true
+    ctrld_cache_size: 8192
+    ctrld_cache_ttl: 300
+    ctrld_log_level: "info"
+    ctrld_metrics_enable: false
+    ctrld_dns_watchdog: true
+    ctrld_discover_mdns: true
+    ctrld_discover_arp: true
+    ctrld_discover_dhcp: true
+
+    # Installation defaults
+    ctrld_defaults:
+      force_install: false
+      enable_service: true
+      start_service: true
+      create_user: true
+      validate_config: true
+      backup_config: true
+
+  pre_tasks:
+    - name: Validate required variables
+      assert:
+        that:
+          - resolver_id is defined
+          - resolver_id | length > 0
+        fail_msg: "resolver_id must be defined and not empty"
+      when: resolver_id is defined
+
+    - name: Display target system information
       debug:
-        var: install_output
+        msg: |
+          Installing ctrld on: {{ inventory_hostname }}
+          System: {{ ansible_system }}
+          Architecture: {{ ansible_architecture }}
+          Distribution: {{ ansible_distribution | default('Unknown') }}
+          Version: {{ ansible_distribution_version | default('Unknown') }}
+          {% if resolver_id is defined %}
+          Resolver ID: {{ resolver_id }}
+          {% endif %}
 
-    - name: Check if ctrld is installed
-      command: /usr/local/bin/ctrld --version
-      register: result
-      ignore_errors: yes
+    - name: Check system requirements
+      assert:
+        that:
+          - ansible_system in ['Linux', 'Darwin', 'Windows']
+        fail_msg: "Unsupported operating system: {{ ansible_system }}"
 
-    - name: Fail if ctrld is not found
-      fail:
-        msg: "ctrld is not installed correctly."
-      when: result.rc != 0
+  roles:
+    - role: ctrld
+      tags:
+        - ctrld
+        - dns
+
+  post_tasks:
+    - name: Verify ctrld installation
+      command: "{{ ctrld_binary_path }} --version"
+      register: ctrld_final_version
+      changed_when: false
+      failed_when: ctrld_final_version.rc != 0
+
+    - name: Display installation summary
+      debug:
+        msg: |
+          ✅ Control-D ctrld installation completed successfully!
+
+          Version: {{ ctrld_final_version.stdout }}
+          Binary: {{ ctrld_binary_path }}
+          Config: {{ ctrld_config_file }}
+          Service: {{ ctrld_service_name }}
+
+          {% if resolver_id is defined %}
+          Resolver ID: {{ resolver_id }}
+          {% endif %}
+
+          {% if is_router | default(false) %}
+          Router type: {{ router_type }}
+          {% endif %}
+
+          Next steps:
+          1. Verify DNS resolution: dig @127.0.0.1 verify.controld.com
+          2. Check service status: {{ 'systemctl status ' + ctrld_service_name if ansible_service_mgr == 'systemd' else 'Service status varies by platform' }}
+          3. View logs: journalctl -u {{ ctrld_service_name }} -f
+
+  handlers:
+    - name: Display post-installation notes
+      debug:
+        msg: |
+          🔧 Post-Installation Configuration Notes:
+
+          • Configuration file location: {{ ctrld_config_file }}
+          • Log directory: {{ ctrld_log_dir }}
+          • To modify configuration, edit the template or use Control-D web interface
+          • Service will auto-restart on configuration changes
+          • For router deployments, ensure persistent storage is available

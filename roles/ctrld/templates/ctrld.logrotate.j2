@@ -1,0 +1,46 @@
+{{ ctrld_log_dir }}/ctrld.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 {{ ctrld_service_user }} {{ ctrld_service_user }}
+    postrotate
+        if systemctl is-active --quiet {{ ctrld_service_name }}; then
+            systemctl reload {{ ctrld_service_name }} > /dev/null 2>&1 || true
+        fi
+    endscript
+}
+
+{{ ctrld_log_dir }}/ctrld.error.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 {{ ctrld_service_user }} {{ ctrld_service_user }}
+    postrotate
+        if systemctl is-active --quiet {{ ctrld_service_name }}; then
+            systemctl reload {{ ctrld_service_name }} > /dev/null 2>&1 || true
+        fi
+    endscript
+}
+
+# Rotate any additional log files in the ctrld log directory
+{{ ctrld_log_dir }}/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 {{ ctrld_service_user }} {{ ctrld_service_user }}
+    sharedscripts
+    postrotate
+        if systemctl is-active --quiet {{ ctrld_service_name }}; then
+            systemctl reload {{ ctrld_service_name }} > /dev/null 2>&1 || true
+        fi
+    endscript
+}

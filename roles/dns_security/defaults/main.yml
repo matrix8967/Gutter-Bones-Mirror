@@ -1,0 +1,354 @@
+---
+# DNS Security Testing Framework - Default Variables
+# Configurable parameters for comprehensive DNS security testing
+
+# ==============================================
+# Test Configuration
+# ==============================================
+dns_security_tests:
+  - "baseline"
+  - "poisoning"
+  - "malicious_blocking"
+  - "https_interception"
+  - "captive_portal"
+  - "secure_dns"
+  - "performance"
+
+# Control whether to fail the playbook on critical security findings
+dns_security_fail_on_critical: false
+
+# Enable detailed logging and verbose output
+dns_security_verbose: true
+
+# Test timeout settings (seconds)
+dns_security_timeouts:
+  dns_query: 3
+  https_request: 10
+  ssl_handshake: 5
+  overall_test: 300
+
+# ==============================================
+# DNS Resolver Configuration
+# ==============================================
+dns_security_resolvers:
+  local:
+    - "127.0.0.1"
+    - "{{ ansible_default_ipv4.gateway | default('192.168.1.1') }}"
+  public:
+    - "1.1.1.1"      # Cloudflare
+    - "1.0.0.1"      # Cloudflare Secondary
+    - "8.8.8.8"      # Google
+    - "8.8.4.4"      # Google Secondary
+    - "9.9.9.9"      # Quad9
+    - "149.112.112.112"  # Quad9 Secondary
+  secure:
+    - "1.1.1.2"      # Cloudflare Malware Blocking
+    - "1.0.0.2"      # Cloudflare Malware Blocking Secondary
+    - "208.67.222.222"   # OpenDNS
+    - "208.67.220.220"   # OpenDNS Secondary
+
+# ==============================================
+# Test Domain Lists
+# ==============================================
+# Known good domains for baseline testing
+dns_baseline_domains:
+  - "google.com"
+  - "cloudflare.com"
+  - "github.com"
+  - "example.com"
+  - "wikipedia.org"
+  - "stackoverflow.com"
+
+# Domains for DNS poisoning detection
+dns_poisoning_test_domains:
+  - "test.com"
+  - "example.org"
+  - "malware.testcategory.com"
+  - "phishing.testcategory.com"
+  - "ads.testcategory.com"
+
+# Known malicious domains for blocking tests
+dns_malicious_domains:
+  # Test categories (safe for testing)
+  - "malware.testcategory.com"
+  - "phishing.testcategory.com"
+  - "ads.testcategory.com"
+  - "tracking.testcategory.com"
+  - "cryptomining.testcategory.com"
+  - "gambling.testcategory.com"
+  - "adult.testcategory.com"
+  - "social.testcategory.com"
+
+  # Real historical threats (may be inactive)
+  - "3322.org"
+  - "017.sh"
+  - "027.ru"
+  - "0x39.com"
+  - "1-2-3-4.com"
+
+# Domains for HTTPS interception testing
+dns_https_test_domains:
+  - "google.com"
+  - "github.com"
+  - "cloudflare.com"
+  - "mozilla.org"
+  - "wikipedia.org"
+
+# ==============================================
+# Captive Portal Detection
+# ==============================================
+captive_portal_endpoints:
+  firefox:
+    url: "http://detectportal.firefox.com/canonical.html"
+    expected_response: "success"
+    expected_code: 200
+
+  google:
+    url: "http://connectivitycheck.gstatic.com/generate_204"
+    expected_response: ""
+    expected_code: 204
+
+  microsoft:
+    url: "http://www.msftconnecttest.com/connecttest.txt"
+    expected_response: "Microsoft Connect Test"
+    expected_code: 200
+
+  apple:
+    url: "http://captive.apple.com/hotspot-detect.html"
+    expected_response: "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"
+    expected_code: 200
+
+# ==============================================
+# DNS-over-HTTPS (DoH) Providers
+# ==============================================
+doh_providers:
+  cloudflare:
+    url: "https://cloudflare-dns.com/dns-query"
+    name: "Cloudflare"
+
+  cloudflare_security:
+    url: "https://security.cloudflare-dns.com/dns-query"
+    name: "Cloudflare Security"
+
+  google:
+    url: "https://dns.google/dns-query"
+    name: "Google"
+
+  quad9:
+    url: "https://dns.quad9.net/dns-query"
+    name: "Quad9"
+
+# ==============================================
+# DNS-over-TLS (DoT) Providers
+# ==============================================
+dot_providers:
+  cloudflare:
+    hostname: "cloudflare-dns.com"
+    port: 853
+    name: "Cloudflare"
+
+  google:
+    hostname: "dns.google"
+    port: 853
+    name: "Google"
+
+  quad9:
+    hostname: "dns.quad9.net"
+    port: 853
+    name: "Quad9"
+
+  one_one:
+    hostname: "one.one.one.one"
+    port: 853
+    name: "1.1.1.1"
+
+# ==============================================
+# Control D Integration
+# ==============================================
+dns_controld_integration: true
+
+controld_endpoints:
+  verify: "https://verify.controld.com"
+  api: "https://api.controld.com"
+
+# Expected Control D DNS servers (update based on your setup)
+controld_dns_servers:
+  - "76.76.19.19"
+  - "76.76.2.22"
+
+# ==============================================
+# Performance Testing Configuration
+# ==============================================
+dns_performance_config:
+  iterations: 10
+  concurrent_queries: 5
+  query_types:
+    - "A"
+    - "AAAA"
+    - "MX"
+    - "NS"
+    - "TXT"
+
+  # Thresholds for performance alerts (milliseconds)
+  thresholds:
+    good_response: 50
+    acceptable_response: 200
+    poor_response: 500
+
+# ==============================================
+# Security Thresholds and Scoring
+# ==============================================
+dns_security_thresholds:
+  baseline_success_rate: 90  # Minimum acceptable DNS success rate (%)
+  malicious_blocking_rate: 80  # Minimum malicious domain blocking rate (%)
+  max_acceptable_response_time: 200  # Maximum acceptable avg response time (ms)
+  max_packet_loss: 5  # Maximum acceptable packet loss (%)
+
+dns_security_scoring:
+  weights:
+    baseline_health: 25
+    malicious_blocking: 30
+    https_security: 20
+    performance: 15
+    secure_dns_support: 10
+
+  # Score ranges
+  excellent: 90
+  good: 75
+  acceptable: 60
+  poor: 40
+
+# ==============================================
+# Reporting Configuration
+# ==============================================
+dns_security_reporting:
+  generate_html: true
+  generate_json: true
+  generate_csv: true
+
+  # Report retention (days)
+  retention_days: 30
+
+  # Include raw test data in reports
+  include_raw_data: true
+
+  # Generate charts and graphs (requires additional dependencies)
+  generate_charts: false
+
+# ==============================================
+# Alert Configuration
+# ==============================================
+dns_security_alerts:
+  enabled: true
+
+  # Alert on these conditions
+  conditions:
+    dns_poisoning_detected: true
+    low_blocking_rate: true
+    https_interception: true
+    captive_portal_present: false  # Usually expected in test environments
+    poor_performance: true
+    service_unavailable: true
+
+  # Alert methods
+  methods:
+    console: true
+    file: true
+    webhook: false  # Requires webhook_url configuration
+
+  # Webhook configuration (if enabled)
+  webhook_url: ""
+  webhook_timeout: 10
+
+# ==============================================
+# Advanced Testing Options
+# ==============================================
+dns_advanced_testing:
+  # Test IPv6 DNS resolution
+  ipv6_testing: false
+
+  # Test DNSSEC validation
+  dnssec_testing: true
+
+  # Test DNS rebinding protection
+  rebinding_testing: true
+
+  # Test DNS amplification attack vectors
+  amplification_testing: false
+
+  # Test DNS tunneling detection
+  tunneling_testing: false
+
+# ==============================================
+# Platform-Specific Configuration
+# ==============================================
+# Tools availability by platform
+dns_security_tools:
+  linux:
+    dig: "/usr/bin/dig"
+    nslookup: "/usr/bin/nslookup"
+    openssl: "/usr/bin/openssl"
+    curl: "/usr/bin/curl"
+    kdig: "/usr/bin/kdig"  # Optional, for DoT testing
+
+  darwin:
+    dig: "/usr/bin/dig"
+    nslookup: "/usr/bin/nslookup"
+    openssl: "/usr/bin/openssl"
+    curl: "/usr/bin/curl"
+
+  windows:
+    nslookup: "nslookup.exe"
+    curl: "curl.exe"
+
+# ==============================================
+# Custom Test Scenarios
+# ==============================================
+# Define custom test scenarios for specific environments
+dns_custom_scenarios:
+  corporate_network:
+    description: "Corporate network with proxy/firewall"
+    tests:
+      - "baseline"
+      - "https_interception"
+      - "captive_portal"
+    expected_interception: true
+
+  home_network:
+    description: "Home network with standard router"
+    tests:
+      - "baseline"
+      - "malicious_blocking"
+      - "performance"
+    expected_interception: false
+
+  public_wifi:
+    description: "Public WiFi with captive portal"
+    tests:
+      - "baseline"
+      - "captive_portal"
+      - "https_interception"
+    expected_captive_portal: true
+
+  test_lab:
+    description: "Controlled test environment"
+    tests:
+      - "baseline"
+      - "poisoning"
+      - "malicious_blocking"
+      - "secure_dns"
+      - "performance"
+    expected_interception: false
+
+# ==============================================
+# Cleanup Configuration
+# ==============================================
+dns_security_cleanup:
+  # Clean up test files after completion
+  cleanup_files: true
+
+  # Preserve test results for debugging
+  preserve_results: true
+
+  # Maximum disk space for test results (MB)
+  max_results_size: 100

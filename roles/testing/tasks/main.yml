@@ -1,0 +1,315 @@
+---
+# Testing Framework for ctrld Deployments
+# Comprehensive validation across platforms and network configurations
+
+- name: Initialize testing environment
+  set_fact:
+    test_results: []
+    test_start_time: "{{ ansible_date_time.epoch }}"
+    test_session_id: "{{ ansible_date_time.iso8601_basic_short }}-{{ ansible_hostname }}"
+
+- name: Create test results directory
+  file:
+    path: "{{ test_results_dir | default('/tmp/gutter_bonez_tests') }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Detect platform and environment
+  set_fact:
+    platform_type: >-
+      {{ 'router' if is_router | default(false) | bool
+         else 'server' if ansible_system == 'Linux' and ansible_virtualization_role is undefined
+         else 'vm' if ansible_virtualization_role == 'guest'
+         else 'desktop' if ansible_system in ['Linux', 'Darwin', 'Windows']
+         else 'unknown' }}
+    network_environment: >-
+      {{ 'isolated' if ansible_default_ipv4.address | ipaddr('private')
+         else 'enterprise' if ansible_domain is defined and ansible_domain != ''
+         else 'public' }}
+
+- name: Test Block - ctrld Service Validation
+  block:
+    - name: Check ctrld binary exists and is executable
+      stat:
+        path: "{{ ctrld_binary_path }}"
+      register: ctrld_binary_check
+
+    - name: Verify ctrld version and build info
+      command: "{{ ctrld_binary_path }} --version"
+      register: ctrld_version_output
+      changed_when: false
+      when: ctrld_binary_check.stat.exists
+
+    - name: Check ctrld configuration syntax
+      command: "{{ ctrld_binary_path }} run --config {{ ctrld_config_file }} --test"
+      register: ctrld_config_test
+      changed_when: false
+      failed_when: false
+      when: ctrld_binary_check.stat.exists
+
+    - name: Verify ctrld service status
+      service_facts:
+      when: ansible_system == 'Linux'
+
+    - name: Check ctrld service on Windows
+      ansible.windows.win_service:
+        name: "{{ ctrld_service_name }}"
+      register: ctrld_windows_service
+      when: ansible_system == 'Windows'
+
+    - name: Record ctrld service test results
+      set_fact:
+        test_results: "{{ test_results + [test_result] }}"
+      vars:
+        test_result:
+          test_name: "ctrld_service_validation"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          hostname: "{{ ansible_hostname }}"
+          platform: "{{ platform_type }}"
+          status: >-
+            {{ 'PASS' if (ctrld_binary_check.stat.exists and
+                          ctrld_config_test.rc == 0 and
+                          (ansible_facts.services[ctrld_service_name + '.service'].state == 'running' if ansible_system == 'Linux'
+                           else ctrld_windows_service.state == 'running' if ansible_system == 'Windows'
+                           else true))
+               else 'FAIL' }}
+          details:
+            binary_exists: "{{ ctrld_binary_check.stat.exists }}"
+            version: "{{ ctrld_version_output.stdout if ctrld_version_output is defined else 'N/A' }}"
+            config_valid: "{{ ctrld_config_test.rc == 0 if ctrld_config_test is defined else false }}"
+            service_running: >-
+              {{ ansible_facts.services[ctrld_service_name + '.service'].state == 'running' if ansible_system == 'Linux'
+                 else ctrld_windows_service.state == 'running' if ansible_system == 'Windows'
+                 else 'unknown' }}
+
+- name: Test Block - DNS Resolution Testing
+  block:
+    - name: Test DNS resolution with ctrld
+      command: "dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} {{ item }}"
+      register: dns_test_results
+      changed_when: false
+      failed_when: false
+      loop:
+        - "google.com"
+        - "verify.controld.com"
+        - "malware.testcategory.com"
+        - "ads.testcategory.com"
+      when: ansible_system != 'Windows'
+
+    - name: Test DNS resolution with nslookup (Windows)
+      ansible.windows.win_shell: "nslookup {{ item }} 127.0.0.1"
+      register: dns_test_results_windows
+      changed_when: false
+      failed_when: false
+      loop:
+        - "google.com"
+        - "verify.controld.com"
+        - "malware.testcategory.com"
+        - "ads.testcategory.com"
+      when: ansible_system == 'Windows'
+
+    - name: Test external DNS bypass detection
+      uri:
+        url: "https://verify.controld.com/json"
+        method: GET
+        timeout: 10
+      register: verify_controld_response
+      failed_when: false
+
+    - name: Record DNS test results
+      set_fact:
+        test_results: "{{ test_results + [dns_test_result] }}"
+      vars:
+        dns_test_result:
+          test_name: "dns_resolution_testing"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          hostname: "{{ ansible_hostname }}"
+          platform: "{{ platform_type }}"
+          status: >-
+            {{ 'PASS' if (dns_test_results.results | selectattr('rc', 'equalto', 0) | list | length > 0
+                          if ansible_system != 'Windows'
+                          else dns_test_results_windows.results | selectattr('rc', 'equalto', 0) | list | length > 0)
+               else 'FAIL' }}
+          details:
+            dns_queries: >-
+              {{ dns_test_results.results | map(attribute='stdout') | list
+                 if ansible_system != 'Windows'
+                 else dns_test_results_windows.results | map(attribute='stdout') | list }}
+            controld_verify: "{{ verify_controld_response.json | default({}) }}"
+
+- name: Test Block - Network Connectivity and Performance
+  block:
+    - name: Test upstream DNS performance
+      command: "dig @{{ item.endpoint.split(':')[0] }} google.com +stats"
+      register: upstream_performance
+      changed_when: false
+      failed_when: false
+      loop: "{{ ctrld_upstreams | default([]) }}"
+      when:
+        - ansible_system != 'Windows'
+        - ctrld_upstreams is defined
+
+    - name: Test latency to Control D endpoints
+      command: "ping -c 3 {{ item }}"
+      register: latency_tests
+      changed_when: false
+      failed_when: false
+      loop:
+        - "freedns.controld.com"
+        - "p0.freedns.controld.com"
+        - "p1.freedns.controld.com"
+        - "p2.freedns.controld.com"
+      when: ansible_system != 'Windows'
+
+    - name: Test Windows network connectivity
+      ansible.windows.win_shell: "Test-NetConnection -ComputerName {{ item }} -Port 53"
+      register: windows_connectivity_tests
+      changed_when: false
+      failed_when: false
+      loop:
+        - "freedns.controld.com"
+        - "p0.freedns.controld.com"
+      when: ansible_system == 'Windows'
+
+    - name: Record network performance results
+      set_fact:
+        test_results: "{{ test_results + [network_test_result] }}"
+      vars:
+        network_test_result:
+          test_name: "network_performance_testing"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          hostname: "{{ ansible_hostname }}"
+          platform: "{{ platform_type }}"
+          status: >-
+            {{ 'PASS' if (latency_tests.results | selectattr('rc', 'equalto', 0) | list | length > 0
+                          if ansible_system != 'Windows'
+                          else windows_connectivity_tests.results | selectattr('rc', 'equalto', 0) | list | length > 0)
+               else 'FAIL' }}
+          details:
+            upstream_performance: "{{ upstream_performance.results | default([]) }}"
+            latency_results: >-
+              {{ latency_tests.results | map(attribute='stdout_lines') | list
+                 if ansible_system != 'Windows'
+                 else windows_connectivity_tests.results | map(attribute='stdout') | list }}
+
+- name: Test Block - Configuration Validation
+  block:
+    - name: Parse ctrld configuration
+      slurp:
+        src: "{{ ctrld_config_file }}"
+      register: ctrld_config_content
+
+    - name: Validate configuration parameters
+      set_fact:
+        config_analysis:
+          listeners_configured: "{{ ctrld_listeners | length if ctrld_listeners is defined else 0 }}"
+          upstreams_configured: "{{ ctrld_upstreams | length if ctrld_upstreams is defined else 0 }}"
+          policies_configured: "{{ ctrld_policies | length if ctrld_policies is defined else 0 }}"
+          log_level: "{{ ctrld_defaults.log_level | default('info') }}"
+
+    - name: Check for common configuration issues
+      set_fact:
+        config_warnings: []
+        config_warnings: >-
+          {{ config_warnings + ['No upstreams configured'] if config_analysis.upstreams_configured == 0 else config_warnings }}
+        config_warnings: >-
+          {{ config_warnings + ['No listeners configured'] if config_analysis.listeners_configured == 0 else config_warnings }}
+        config_warnings: >-
+          {{ config_warnings + ['Debug logging enabled'] if ctrld_defaults.log_level == 'debug' else config_warnings }}
+
+    - name: Record configuration validation results
+      set_fact:
+        test_results: "{{ test_results + [config_test_result] }}"
+      vars:
+        config_test_result:
+          test_name: "configuration_validation"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          hostname: "{{ ansible_hostname }}"
+          platform: "{{ platform_type }}"
+          status: "{{ 'PASS' if config_warnings | length == 0 else 'WARN' }}"
+          details:
+            analysis: "{{ config_analysis }}"
+            warnings: "{{ config_warnings }}"
+            config_size: "{{ ctrld_config_content.content | b64decode | length }}"
+
+- name: Test Block - System Integration
+  block:
+    - name: Check system DNS configuration
+      command: "cat /etc/resolv.conf"
+      register: system_dns_config
+      changed_when: false
+      when: ansible_system == 'Linux'
+
+    - name: Check Windows DNS configuration
+      ansible.windows.win_shell: "Get-DnsClientServerAddress | ConvertTo-Json"
+      register: windows_dns_config
+      when: ansible_system == 'Windows'
+
+    - name: Check for DNS conflicts
+      shell: "ss -tlnp | grep ':53 ' || netstat -tlnp | grep ':53 '"
+      register: dns_port_conflicts
+      changed_when: false
+      failed_when: false
+      when: ansible_system == 'Linux'
+
+    - name: Record system integration results
+      set_fact:
+        test_results: "{{ test_results + [integration_test_result] }}"
+      vars:
+        integration_test_result:
+          test_name: "system_integration"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          hostname: "{{ ansible_hostname }}"
+          platform: "{{ platform_type }}"
+          status: >-
+            {{ 'PASS' if (dns_port_conflicts.stdout_lines | length <= 1
+                          if ansible_system == 'Linux' else true)
+               else 'WARN' }}
+          details:
+            system_dns: >-
+              {{ system_dns_config.stdout_lines if ansible_system == 'Linux'
+                 else windows_dns_config.stdout | from_json if ansible_system == 'Windows'
+                 else 'unknown' }}
+            port_conflicts: "{{ dns_port_conflicts.stdout_lines if ansible_system == 'Linux' else [] }}"
+
+- name: Generate comprehensive test report
+  template:
+    src: test_report.j2
+    dest: "{{ test_results_dir }}/{{ test_session_id }}_test_report.json"
+    mode: '0644'
+  delegate_to: localhost
+  vars:
+    test_summary:
+      session_id: "{{ test_session_id }}"
+      hostname: "{{ ansible_hostname }}"
+      platform: "{{ platform_type }}"
+      environment: "{{ network_environment }}"
+      start_time: "{{ test_start_time }}"
+      end_time: "{{ ansible_date_time.epoch }}"
+      duration: "{{ (ansible_date_time.epoch | int) - (test_start_time | int) }}"
+      total_tests: "{{ test_results | length }}"
+      passed_tests: "{{ test_results | selectattr('status', 'equalto', 'PASS') | list | length }}"
+      failed_tests: "{{ test_results | selectattr('status', 'equalto', 'FAIL') | list | length }}"
+      warning_tests: "{{ test_results | selectattr('status', 'equalto', 'WARN') | list | length }}"
+      results: "{{ test_results }}"
+
+- name: Display test summary
+  debug:
+    msg: |
+      🧪 Test Session Complete: {{ test_session_id }}
+      📊 Results Summary:
+        • Total Tests: {{ test_results | length }}
+        • Passed: {{ test_results | selectattr('status', 'equalto', 'PASS') | list | length }}
+        • Failed: {{ test_results | selectattr('status', 'equalto', 'FAIL') | list | length }}
+        • Warnings: {{ test_results | selectattr('status', 'equalto', 'WARN') | list | length }}
+        • Duration: {{ (ansible_date_time.epoch | int) - (test_start_time | int) }}s
+      📋 Report: {{ test_results_dir }}/{{ test_session_id }}_test_report.json
+
+- name: Fail playbook if critical tests failed
+  fail:
+    msg: "Critical tests failed. Check test report for details."
+  when:
+    - test_results | selectattr('status', 'equalto', 'FAIL') | list | length > 0
+    - fail_on_test_failures | default(false) | bool

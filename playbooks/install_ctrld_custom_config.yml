@@ -1,21 +1,341 @@
 ---
-  - name: Deploy ctrld on Linux hosts
-    hosts: all
-    become: yes
-    tasks:
-      - name: Download and install ctrld
-        shell: >
-          sh -c 'sh -c "$(curl -sSL https://api.controld.com/dl)"'
-        args:
-          creates: /usr/local/bin/ctrld
-      - name: Upload custom ctrld configuration
-        copy:
-          src: roles/ctrld/files/ctrld.toml
-          dest: /etc/controld/ctrld.toml
-          owner: root
-          group: root
-          mode: '0644'
-      - name: Start ctrld service
-        shell: ctrld start --cd={{ resolver_id }}
-        args:
-          creates: /etc/systemd/system/ctrld.service
+- name: Install Control-D ctrld with custom configuration
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    # Custom configuration override defaults
+    ctrld_custom_deployment: true
+
+    # Advanced listener configuration
+    ctrld_listeners:
+      "0":
+        ip: "{{ ctrld_primary_listener_ip | default('0.0.0.0') }}"
+        port: "{{ ctrld_primary_listener_port | default(5354) }}"
+        restricted: false
+        allow_wan_clients: "{{ ctrld_allow_wan_clients | default(false) }}"
+        policy_name: "Custom DNS Policy"
+        networks:
+          - network.0: ["upstream.0"]
+          - network.1: ["upstream.1"]
+        rules:
+          - "*.local": ["upstream.local"]
+          - "*.lan": ["upstream.local"]
+          - "*.internal": ["upstream.local"]
+          - "captive.apple.com": []
+          - "detectportal.firefox.com": []
+          - "neverssl.com": []
+          - "connectivitycheck.gstatic.com": []
+          - "clients3.google.com": []
+          - "msftconnecttest.com": []
+          - "*.msftncsi.com": []
+        macs:
+          # Example MAC-based routing - customize per environment
+          - "{{ priority_device_mac | default('00:00:00:00:00:00') }}":
+              ["upstream.premium"]
+
+      "1":
+        ip: "{{ ctrld_secondary_listener_ip | default('127.0.0.1') }}"
+        port: "{{ ctrld_secondary_listener_port | default(5355) }}"
+        restricted: true
+        allow_wan_clients: false
+        policy_name: "Internal DNS Policy"
+        networks:
+          - network.internal: ["upstream.local"]
+        rules:
+          - "*.{{ ansible_domain | default('localdomain') }}":
+              ["upstream.local"]
+          - "{{ ansible_hostname }}.{{ ansible_domain | default('localdomain') }}":
+              ["upstream.local"]
+
+    # Network definitions
+    ctrld_networks:
+      "0":
+        name: "External Networks"
+        cidrs: ["0.0.0.0/0"]
+      "1":
+        name: "Trusted Networks"
+        cidrs: "{{ ctrld_trusted_networks | default(['192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12']) }}"
+      "internal":
+        name: "Internal Network"
+        cidrs: "{{ ctrld_internal_networks | default(['127.0.0.0/8']) }}"
+
+    # Advanced upstream configuration
+    ctrld_upstreams:
+      "0":
+        name: "{{ ctrld_primary_upstream_name | default('Control D - Security') }}"
+        type: "{{ ctrld_primary_upstream_type | default('doh') }}"
+        endpoint: "{{ ctrld_primary_upstream_endpoint | default('https://freedns.controld.com/p1') }}"
+        bootstrap_ip: "{{ ctrld_primary_bootstrap_ip | default('76.76.2.11') }}"
+        timeout: "{{ ctrld_primary_timeout | default(5000) }}"
+        ip_stack: "{{ ctrld_primary_ip_stack | default('split') }}"
+        send_client_info: "{{ ctrld_send_client_info | default(true) }}"
+
+      "1":
+        name: "{{ ctrld_secondary_upstream_name | default('Control D - Family') }}"
+        type: "{{ ctrld_secondary_upstream_type | default('doh3') }}"
+        endpoint: "{{ ctrld_secondary_upstream_endpoint | default('h3://freedns.controld.com/p2') }}"
+        bootstrap_ip: "{{ ctrld_secondary_bootstrap_ip | default('76.76.2.11') }}"
+        timeout: "{{ ctrld_secondary_timeout | default(3000) }}"
+        ip_stack: "{{ ctrld_secondary_ip_stack | default('split') }}"
+        send_client_info: "{{ ctrld_send_client_info | default(true) }}"
+
+      "premium":
+        name: "{{ ctrld_premium_upstream_name | default('Control D - Premium') }}"
+        type: "doh"
+        endpoint: "{{ ctrld_premium_upstream_endpoint | default('https://dns.controld.com/comss') }}"
+        bootstrap_ip: "76.76.2.22"
+        timeout: 2000
+        ip_stack: "split"
+        send_client_info: true
+
+      "local":
+        name: "Local System DNS"
+        type: "os"
+        timeout: 2000
+        discoverable: true
+
+      "fallback":
+        name: "Cloudflare Fallback"
+        type: "doh"
+        endpoint: "https://cloudflare-dns.com/dns-query"
+        bootstrap_ip: "1.1.1.1"
+        timeout: 8000
+        ip_stack: "both"
+        send_client_info: false
+
+    # Advanced service configuration
+    ctrld_cache_enable: "{{ ctrld_enable_cache | default(true) }}"
+    ctrld_cache_size: "{{ ctrld_cache_size_custom | default(16384) }}"
+    ctrld_cache_ttl: "{{ ctrld_cache_ttl_custom | default(600) }}"
+    ctrld_cache_serve_stale: "{{ ctrld_serve_stale_cache | default(true) }}"
+    ctrld_log_level: "{{ ctrld_custom_log_level | default('info') }}"
+    ctrld_max_concurrent_requests: "{{ ctrld_max_requests | default(2000) }}"
+
+    # Enhanced monitoring and metrics
+    ctrld_metrics_enable: "{{ enable_ctrld_metrics | default(true) }}"
+    ctrld_metrics_listen: "{{ ctrld_metrics_bind | default('127.0.0.1:8080') }}"
+
+    # Advanced discovery settings
+    ctrld_discover_mdns: "{{ ctrld_enable_mdns | default(true) }}"
+    ctrld_discover_arp: "{{ ctrld_enable_arp | default(true) }}"
+    ctrld_discover_dhcp: "{{ ctrld_enable_dhcp | default(true) }}"
+    ctrld_discover_ptr: "{{ ctrld_enable_ptr | default(true) }}"
+    ctrld_discover_hosts: "{{ ctrld_enable_hosts | default(true) }}"
+    ctrld_discover_interval: "{{ ctrld_discovery_refresh | default(600) }}"
+
+    # DHCP lease file configuration
+    ctrld_dhcp_lease_file: "{{ custom_dhcp_lease_file | default(omit) }}"
+    ctrld_dhcp_lease_format: "{{ custom_dhcp_lease_format | default('dnsmasq') }}"
+
+    # DNS watchdog configuration
+    ctrld_dns_watchdog: "{{ ctrld_enable_watchdog | default(true) }}"
+    ctrld_watchdog_interval: "{{ ctrld_watchdog_check_interval | default('30s') }}"
+
+    # Installation and service defaults
+    ctrld_defaults:
+      force_install: "{{ ctrld_force_reinstall | default(false) }}"
+      enable_service: "{{ ctrld_enable_autostart | default(true) }}"
+      start_service: "{{ ctrld_start_immediately | default(true) }}"
+      create_user: "{{ ctrld_create_service_user | default(true) }}"
+      validate_config: "{{ ctrld_validate_on_deploy | default(true) }}"
+      backup_config: "{{ ctrld_backup_existing_config | default(true) }}"
+
+    # Custom configuration injection
+    ctrld_custom_config: |
+      # Additional custom configuration
+      {% if ctrld_additional_config is defined %}
+      {{ ctrld_additional_config }}
+      {% endif %}
+
+      # Environment-specific overrides
+      {% if ansible_hostname in groups.get('routers', []) %}
+      [service]
+      cache_size = 4096
+      max_concurrent_requests = 512
+      {% endif %}
+
+      {% if ansible_hostname in groups.get('servers', []) %}
+      [service]
+      metrics_query_stats = true
+      log_level = "debug"
+      {% endif %}
+
+  pre_tasks:
+    - name: Validate custom configuration parameters
+      assert:
+        that:
+          - resolver_id is defined or ctrld_primary_upstream_endpoint is defined
+          - ctrld_primary_listener_port | int > 0
+          - ctrld_primary_listener_port | int < 65536
+        fail_msg: |
+          Custom configuration validation failed. Please ensure:
+          - resolver_id is set OR ctrld_primary_upstream_endpoint is provided
+          - ctrld_primary_listener_port is between 1-65535
+
+    - name: Display custom configuration summary
+      debug:
+        msg: |
+          🔧 Custom ctrld Configuration Deployment
+
+          Target: {{ inventory_hostname }}
+          System: {{ ansible_system }} {{ ansible_distribution | default('') }} {{ ansible_distribution_version | default('') }}
+
+          Listeners:
+          {% for listener_id, listener in ctrld_listeners.items() %}
+          - {{ listener.policy_name }}: {{ listener.ip }}:{{ listener.port }}
+          {% endfor %}
+
+          Upstreams:
+          {% for upstream_id, upstream in ctrld_upstreams.items() %}
+          - {{ upstream.name }}: {{ upstream.endpoint }}
+          {% endfor %}
+
+          Features:
+          - Caching: {{ 'Enabled' if ctrld_cache_enable else 'Disabled' }}
+          - Metrics: {{ 'Enabled' if ctrld_metrics_enable else 'Disabled' }}
+          - Client Discovery: {{ 'Enabled' if ctrld_discover_mdns else 'Disabled' }}
+
+          {% if resolver_id is defined %}
+          Control D Resolver ID: {{ resolver_id }}
+          {% endif %}
+
+    - name: Create custom configuration backup directory
+      file:
+        path: "{{ ctrld_config_dir }}/backups"
+        state: directory
+        mode: "0755"
+      become: yes
+
+    - name: Backup existing configuration
+      copy:
+        src: "{{ ctrld_config_file }}"
+        dest: "{{ ctrld_config_dir }}/backups/ctrld.toml.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        backup: yes
+      become: yes
+      when:
+        - ctrld_backup_existing_config | default(true)
+        - ctrld_config_file is file
+      failed_when: false
+
+  roles:
+    - role: ctrld
+      tags:
+        - ctrld
+        - dns
+        - custom-config
+
+  post_tasks:
+    - name: Validate custom ctrld configuration
+      command: "{{ ctrld_binary_path }} run --config {{ ctrld_config_file }} --test"
+      register: config_validation
+      changed_when: false
+      failed_when: config_validation.rc != 0
+      become: yes
+
+    - name: Test DNS resolution through custom listeners
+      command: "dig @{{ item.value.ip }} +short +time=5 verify.controld.com -p {{ item.value.port }}"
+      loop: "{{ ctrld_listeners | dict2items }}"
+      register: dns_test_results
+      changed_when: false
+      failed_when: false
+      when: item.value.ip not in ['0.0.0.0', '::']
+
+    - name: Display DNS test results
+      debug:
+        msg: |
+          DNS Resolution Test Results:
+          {% for result in dns_test_results.results %}
+          {% if result.skipped is not defined %}
+          Listener {{ result.item.key }} ({{ result.item.value.ip }}:{{ result.item.value.port }}): {{ 'PASS' if result.rc == 0 else 'FAIL' }}
+          {% if result.rc == 0 %}  Response: {{ result.stdout }}{% endif %}
+          {% endif %}
+          {% endfor %}
+
+    - name: Check service metrics endpoint
+      uri:
+        url: "http://{{ ctrld_metrics_listen.split(':')[0] }}:{{ ctrld_metrics_listen.split(':')[1] }}/metrics"
+        method: GET
+        timeout: 5
+      register: metrics_check
+      when: ctrld_metrics_enable | default(false)
+      failed_when: false
+
+    - name: Display final installation status
+      debug:
+        msg: |
+          🎉 Custom Control-D ctrld Installation Complete!
+
+          ✅ Configuration validated successfully
+          ✅ Service {{ 'started' if ctrld_start_immediately else 'configured but not started' }}
+          {% if metrics_check is defined and metrics_check.status == 200 %}
+          ✅ Metrics endpoint accessible
+          {% endif %}
+
+          Configuration Details:
+          📍 Binary: {{ ctrld_binary_path }}
+          📍 Config: {{ ctrld_config_file }}
+          📍 Service: {{ ctrld_service_name }}
+          📍 Logs: {{ ctrld_log_dir }}/ctrld.log
+
+          Listeners:
+          {% for listener_id, listener in ctrld_listeners.items() %}
+          🔗 {{ listener.policy_name }}: {{ listener.ip }}:{{ listener.port }}
+          {% endfor %}
+
+          Verification Commands:
+          {% for listener_id, listener in ctrld_listeners.items() %}
+          {% if listener.ip not in ['0.0.0.0', '::'] %}
+          dig @{{ listener.ip }} verify.controld.com -p {{ listener.port }}
+          {% endif %}
+          {% endfor %}
+
+          Service Management:
+          {% if ansible_service_mgr == 'systemd' %}
+          sudo systemctl status {{ ctrld_service_name }}
+          sudo journalctl -u {{ ctrld_service_name }} -f
+          {% elif ansible_system == 'Darwin' %}
+          sudo launchctl list | grep {{ ctrld_service_name }}
+          {% elif is_router | default(false) %}
+          {{ ctrld_binary_path }} status
+          {% endif %}
+
+          {% if ctrld_metrics_enable %}
+          📊 Metrics: http://{{ ctrld_metrics_listen }}
+          {% endif %}
+
+  handlers:
+    - name: Display troubleshooting information
+      debug:
+        msg: |
+          🔧 Troubleshooting Guide:
+
+          Configuration Issues:
+          - Check config syntax: {{ ctrld_binary_path }} run --config {{ ctrld_config_file }} --test
+          - View current config: cat {{ ctrld_config_file }}
+          - Backup configs available in: {{ ctrld_config_dir }}/backups/
+
+          Service Issues:
+          {% if ansible_service_mgr == 'systemd' %}
+          - Service status: systemctl status {{ ctrld_service_name }}
+          - Service logs: journalctl -u {{ ctrld_service_name }} --since "1 hour ago"
+          - Restart service: systemctl restart {{ ctrld_service_name }}
+          {% endif %}
+
+          Network Issues:
+          - Test local DNS: dig @127.0.0.1 google.com -p {{ ctrld_listeners['0'].port }}
+          - Check listeners: netstat -tulpn | grep {{ ctrld_binary_path | basename }}
+          - Verify upstream connectivity: {{ ctrld_binary_path }} run --config {{ ctrld_config_file }} --test
+
+          Performance Tuning:
+          - Monitor cache hit rate via metrics endpoint
+          - Adjust cache_size if memory usage is high
+          - Tune max_concurrent_requests based on load
+
+          Router-Specific:
+          {% if is_router | default(false) %}
+          - Ensure persistent storage for config files
+          - Check router firewall rules for DNS ports
+          - Verify router startup scripts include ctrld
+          {% endif %}

@@ -1,0 +1,262 @@
+---
+# Gutter Bonez Infrastructure Inventory Template
+# Generic example configuration for reference
+# Copy and customize for your environment
+
+[all:vars]
+# Global configuration
+ansible_user=your_username
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_host_key_checking=False
+ansible_python_interpreter=/usr/bin/python3
+
+# Domain configuration
+domain_name=example.local
+fqdn_suffix=.example.local
+
+# Network topology (customize for your network)
+primary_subnet=192.168.1.0/24
+primary_gateway=192.168.1.1
+
+# Control D configuration
+ctrld_service_name=ctrld
+ctrld_binary_path=/usr/local/bin/ctrld
+ctrld_config_dir=/etc/ctrld
+ctrld_config_file=/etc/ctrld/ctrld.toml
+ctrld_log_dir=/var/log/ctrld
+ctrld_log_file=/var/log/ctrld/ctrld.log
+ctrld_service_user=controld
+
+# Testing configuration
+test_environment=production
+test_results_dir=/tmp/gutter_bonez_tests
+discovery_results_dir=/tmp/gutter_bonez_discovery
+chaos_results_dir=/tmp/gutter_bonez_chaos
+
+# ====================
+# NETWORK INFRASTRUCTURE
+# ====================
+
+[gateways]
+gateway ansible_host=192.168.1.1 ansible_user=admin device_type=edgeos router_model="EdgeRouter 8 Pro" ansible_port=22
+
+[network_switches]
+# Example switches - customize for your hardware
+switch-01 ansible_host=192.168.1.30 ansible_user=admin device_type=edgeswitch model="EdgeSwitch 10X"
+switch-02 ansible_host=192.168.1.31 ansible_user=admin device_type=edgeswitch model="EdgeSwitch 10XP"
+
+[routers]
+# Testing routers and alternate network devices
+lab-router-01 ansible_host=192.168.10.1 ansible_user=admin device_type=asuswrt_merlin model="RT-AX58U"
+lab-router-02 ansible_host=192.168.10.2 ansible_user=admin device_type=asuswrt_merlin model="GT-AX6000"
+
+[wireless_infrastructure]
+access-point-01 ansible_host=192.168.1.90 ansible_user=admin device_type=unifi model="UAP-SHD"
+
+# ====================
+# SERVERS & WORKSTATIONS
+# ====================
+
+[production_servers]
+# Production environment servers
+prod-server-01 ansible_host=192.168.1.10 ansible_user=admin server_role=primary
+prod-server-02 ansible_host=192.168.1.11 ansible_user=admin server_role=secondary
+
+[dns_servers]
+# DNS/Control D servers
+dns-primary ansible_host=192.168.1.53 ansible_user=admin server_role=dns_primary
+dns-secondary ansible_host=192.168.1.54 ansible_user=admin server_role=dns_secondary
+
+[monitoring_servers]
+# Monitoring and observability
+monitoring-01 ansible_host=192.168.1.40 ansible_user=admin server_role=monitoring
+
+[development_servers]
+# Development and testing environment
+dev-server-01 ansible_host=192.168.10.10 ansible_user=developer server_role=development
+dev-server-02 ansible_host=192.168.10.11 ansible_user=developer server_role=testing
+
+[lab_servers]
+# Lab testing servers (different OS variants)
+lab-ubuntu ansible_host=192.168.10.20 ansible_user=testuser os_family=debian
+lab-debian ansible_host=192.168.10.21 ansible_user=testuser os_family=debian
+lab-fedora ansible_host=192.168.10.22 ansible_user=testuser os_family=redhat
+lab-centos ansible_host=192.168.10.23 ansible_user=testuser os_family=redhat
+
+[workstations]
+# QA and development workstations
+qa-workstation-01 ansible_host=192.168.1.100 ansible_user=qa_user
+qa-workstation-02 ansible_host=192.168.1.101 ansible_user=qa_user
+dev-workstation-01 ansible_host=192.168.1.200 ansible_user=dev_user
+
+[windows_servers]
+# Windows Server environment (if applicable)
+win-ad-server ansible_host=192.168.10.30 ansible_user=administrator ansible_connection=winrm ansible_winrm_transport=basic
+win-file-server ansible_host=192.168.10.31 ansible_user=administrator ansible_connection=winrm ansible_winrm_transport=basic
+
+[windows_workstations]
+# Windows client systems
+win-client-01 ansible_host=192.168.10.40 ansible_user=testuser ansible_connection=winrm ansible_winrm_transport=basic
+
+# ====================
+# LOGICAL GROUPINGS
+# ====================
+
+[linux_systems:children]
+production_servers
+dns_servers
+monitoring_servers
+development_servers
+lab_servers
+workstations
+
+[network_devices:children]
+gateways
+network_switches
+routers
+wireless_infrastructure
+
+[servers:children]
+production_servers
+dns_servers
+monitoring_servers
+development_servers
+lab_servers
+windows_servers
+
+[testing_infrastructure:children]
+lab_servers
+development_servers
+windows_workstations
+
+[production_infrastructure:children]
+production_servers
+dns_servers
+monitoring_servers
+gateways
+network_switches
+
+# ====================
+# ENVIRONMENT GROUPINGS
+# ====================
+
+[production_network]
+# Production environment (VLAN 10)
+[production_network:children]
+gateways
+production_servers
+dns_servers
+monitoring_servers
+workstations
+
+[lab_network]
+# Lab/testing environment (VLAN 20)
+[lab_network:children]
+lab_servers
+development_servers
+windows_servers
+windows_workstations
+
+[dmz_network]
+# DMZ/guest environment (VLAN 30)
+# Add hosts that belong to DMZ here
+
+# ====================
+# FUNCTIONAL GROUPINGS
+# ====================
+
+[dns_infrastructure:children]
+dns_servers
+
+[monitoring_stack:children]
+monitoring_servers
+
+[development_environment:children]
+development_servers
+dev-workstation-01
+
+[qa_environment:children]
+lab_servers
+qa-workstation-01
+qa-workstation-02
+
+# ====================
+# OS FAMILY GROUPINGS
+# ====================
+
+[debian_family]
+# Debian-based systems
+[debian_family:children]
+# Add groups containing Debian/Ubuntu systems
+
+[rhel_family]
+# RHEL-based systems
+[rhel_family:children]
+# Add groups containing RHEL/CentOS/Fedora systems
+
+[windows_family:children]
+windows_servers
+windows_workstations
+
+# ====================
+# GROUP VARIABLES
+# ====================
+
+[gateways:vars]
+ansible_network_os=edgeos
+device_category=network
+
+[network_switches:vars]
+device_category=network
+ansible_connection=network_cli
+
+[routers:vars]
+device_category=network
+
+[production_servers:vars]
+environment=production
+backup_required=true
+monitoring_enabled=true
+
+[dns_servers:vars]
+environment=production
+service_type=dns
+backup_required=true
+monitoring_enabled=true
+
+[lab_servers:vars]
+environment=lab
+backup_required=false
+chaos_testing_enabled=true
+
+[development_servers:vars]
+environment=development
+backup_required=false
+
+[windows_servers:vars]
+ansible_connection=winrm
+ansible_winrm_server_cert_validation=ignore
+
+[workstations:vars]
+environment=production
+user_environment=true
+
+# ====================
+# NOTES
+# ====================
+
+# To use this template:
+# 1. Copy this file to your own inventory file (e.g., inventory/hosts)
+# 2. Replace all IP addresses with your actual network addresses
+# 3. Update usernames and SSH key paths
+# 4. Customize groups based on your infrastructure
+# 5. Encrypt sensitive inventory files with ansible-vault:
+#    ansible-vault encrypt inventory/hosts
+# 6. Update ansible.cfg to point to your vault password file
+
+# Security recommendations:
+# - Use Ansible Vault to encrypt this file if it contains sensitive info
+# - Use SSH keys instead of passwords
+# - Regularly rotate SSH keys and vault passwords
+# - Keep backups of encrypted inventory files
+# - Use different vault passwords for different environments

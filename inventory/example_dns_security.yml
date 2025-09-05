@@ -1,0 +1,301 @@
+---
+# Example DNS Security Testing Inventory for Gutter Bonez Infrastructure
+# This inventory demonstrates how to configure hosts for comprehensive DNS security testing
+# Designed for Azazel's QA testing infrastructure across diverse network configurations
+
+all:
+  children:
+    # DNS Security Testing Targets
+    dns_testing:
+      children:
+        # Linux systems for comprehensive DNS testing
+        linux_dns_targets:
+          hosts:
+            ubuntu-test-01:
+              ansible_host: 192.168.1.100
+              ansible_user: azazel
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+              # DNS Security Testing Configuration
+              dns_security_tests:
+                - "baseline"
+                - "malicious_blocking"
+                - "https_interception"
+                - "captive_portal"
+                - "performance"
+                - "dnssec"
+                - "secure_dns"
+              dns_controld_integration: true
+              dns_security_fail_on_critical: false
+              test_environment: "lab"
+
+            debian-server-02:
+              ansible_host: 192.168.1.101
+              ansible_user: azazel
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+              dns_security_tests:
+                - "baseline"
+                - "malicious_blocking"
+                - "performance"
+              dns_controld_integration: true
+              test_environment: "production"
+
+            fedora-workstation-03:
+              ansible_host: 192.168.1.102
+              ansible_user: azazel
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+              dns_security_tests:
+                - "baseline"
+                - "https_interception"
+                - "captive_portal"
+                - "secure_dns"
+              dns_controld_integration: false
+              test_environment: "development"
+
+        # Network appliances and routers for DNS testing
+        network_dns_targets:
+          hosts:
+            rt-ax6000-main:
+              ansible_host: 192.168.1.1
+              ansible_user: admin
+              ansible_ssh_private_key_file: ~/.ssh/router_key
+              ansible_network_os: asuswrt
+              # Router-specific DNS testing
+              dns_security_tests:
+                - "baseline"
+                - "malicious_blocking"
+              dns_controld_integration: true
+              router_firmware: "asuswrt-merlin"
+
+            edgerouter-8-pro:
+              ansible_host: 192.168.2.1
+              ansible_user: azazel
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+              ansible_network_os: edgeos
+              dns_security_tests:
+                - "baseline"
+                - "performance"
+              dns_controld_integration: false
+              router_firmware: "edgeos"
+
+        # VLAN isolated test environments
+        vlan_test_targets:
+          hosts:
+            vlan-test-10:
+              ansible_host: 192.168.10.50
+              ansible_user: azazel
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+              # Isolated VLAN testing
+              dns_security_tests:
+                - "baseline"
+                - "captive_portal"
+                - "https_interception"
+              dns_controld_integration: true
+              test_environment: "vlan_isolation"
+              vlan_id: 10
+
+            vlan-test-20:
+              ansible_host: 192.168.20.50
+              ansible_user: azazel
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+              dns_security_tests:
+                - "baseline"
+                - "malicious_blocking"
+                - "performance"
+              dns_controld_integration: true
+              test_environment: "guest_network"
+              vlan_id: 20
+
+    # Control D DNS Infrastructure
+    controld_infrastructure:
+      hosts:
+        ctrld-primary:
+          ansible_host: 192.168.1.110
+          ansible_user: azazel
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+          # Primary Control D server
+          dns_security_tests:
+            - "baseline"
+            - "malicious_blocking"
+            - "performance"
+            - "secure_dns"
+          dns_controld_integration: true
+          ctrld_role: "primary"
+          test_environment: "production"
+
+        ctrld-backup:
+          ansible_host: 192.168.1.111
+          ansible_user: azazel
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+          # Backup Control D server
+          dns_security_tests:
+            - "baseline"
+            - "performance"
+          dns_controld_integration: true
+          ctrld_role: "backup"
+          test_environment: "production"
+
+    # Development and testing environments
+    development_targets:
+      hosts:
+        dev-workstation-01:
+          ansible_host: 192.168.1.200
+          ansible_user: azazel
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+          # Development environment testing
+          dns_security_tests:
+            - "baseline"
+            - "https_interception"
+            - "captive_portal"
+          dns_controld_integration: false
+          test_environment: "development"
+
+        chaos-test-vm:
+          ansible_host: 192.168.1.201
+          ansible_user: azazel
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+          # Chaos engineering DNS testing
+          dns_security_tests:
+            - "baseline"
+            - "malicious_blocking"
+            - "performance"
+          dns_controld_integration: true
+          test_environment: "chaos"
+          chaos_testing_enabled: true
+
+  vars:
+    # Global DNS Security Testing Configuration
+    dns_security_global:
+      # Test execution settings
+      parallel_testing: true
+      test_timeout: 300
+      cleanup_on_failure: true
+      generate_artifacts: true
+      fail_fast: false
+
+      # Reporting configuration
+      generate_html_report: true
+      generate_json_report: true
+      generate_csv_data: true
+      report_retention_days: 30
+
+      # Alert thresholds
+      thresholds:
+        dns_success_rate_min: 90
+        malicious_blocking_rate_min: 80
+        max_response_time_ms: 200
+        max_packet_loss_percent: 5
+
+    # Custom malicious domains for testing (safe test domains)
+    dns_test_malicious_domains:
+      - "malware.testcategory.com"
+      - "phishing.testcategory.com"
+      - "ads.testcategory.com"
+      - "tracking.testcategory.com"
+      - "cryptomining.testcategory.com"
+      - "gambling.testcategory.com"
+      - "adult.testcategory.com"
+      - "social.testcategory.com"
+
+    # DNS-over-HTTPS providers for testing
+    dns_doh_test_providers:
+      - url: "https://cloudflare-dns.com/dns-query"
+        name: "Cloudflare"
+      - url: "https://security.cloudflare-dns.com/dns-query"
+        name: "Cloudflare Security"
+      - url: "https://dns.google/dns-query"
+        name: "Google"
+
+    # DNS-over-TLS providers for testing
+    dns_dot_test_providers:
+      - hostname: "cloudflare-dns.com"
+        port: 853
+        name: "Cloudflare"
+      - hostname: "dns.google"
+        port: 853
+        name: "Google"
+
+    # Performance testing configuration
+    dns_performance_config:
+      iterations: 10
+      concurrent_queries: 5
+      test_domains:
+        - "google.com"
+        - "cloudflare.com"
+        - "github.com"
+        - "stackoverflow.com"
+        - "wikipedia.org"
+
+    # Network environment detection
+    network_environment_detection:
+      corporate_indicators:
+        - "proxy.company.com"
+        - "*.corp"
+        - "intranet.*"
+      captive_portal_tests:
+        - "http://detectportal.firefox.com/canonical.html"
+        - "http://connectivitycheck.gstatic.com/generate_204"
+        - "http://www.msftconnecttest.com/connecttest.txt"
+
+    # SSH connection settings
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10'
+    ansible_ssh_pipelining: true
+
+    # Python interpreter paths
+    ansible_python_interpreter: "{{ '/usr/bin/python3' if ansible_os_family != 'Windows' else 'python' }}"
+
+    # Control D integration settings
+    controld_integration_defaults:
+      verify_endpoint: "https://verify.controld.com"
+      api_endpoint: "https://api.controld.com"
+      expected_dns_servers:
+        - "76.76.19.19"
+        - "76.76.2.22"
+
+    # Test result storage
+    dns_security_results:
+      base_path: "/tmp/gutter_bonez_dns_security"
+      archive_results: true
+      export_formats:
+        - "json"
+        - "html"
+        - "csv"
+
+# Group-specific variables
+dns_testing:
+  vars:
+    # Enable DNS security testing for all hosts in this group
+    dns_security_testing_enabled: true
+    dns_test_parallel_execution: true
+
+linux_dns_targets:
+  vars:
+    # Linux-specific DNS testing configuration
+    ansible_become: true
+    ansible_become_method: sudo
+    dns_security_tools_install: true
+    required_packages:
+      - "{{ 'bind-utils' if ansible_os_family == 'RedHat' else 'dnsutils' }}"
+      - curl
+      - openssl
+      - knot-dnsutils  # For DoT testing with kdig
+
+network_dns_targets:
+  vars:
+    # Network device specific configuration
+    ansible_become: false
+    dns_security_tests_limited: true  # Reduced test set for network devices
+
+controld_infrastructure:
+  vars:
+    # Control D infrastructure specific settings
+    dns_controld_integration: true
+    dns_security_fail_on_critical: true
+    ctrld_service_monitoring: true
+    enhanced_logging: true
+
+development_targets:
+  vars:
+    # Development environment settings
+    dns_security_fail_on_critical: false
+    test_environment: "development"
+    cleanup_test_artifacts: true

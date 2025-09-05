@@ -1,25 +1,231 @@
 ---
-  - name: Download and install ctrld
-    shell: |
-      sudo sh -c 'sh -c "$(curl -sSL https://api.controld.com/dl)" -s "{{ resolver_id }}"'
-    args:
-      executable: /bin/bash
-  
-  - name: Create ctrld configuration
-    template:
-      src: roles/ctrld/templates/ctrld.toml.j2
-      dest: /etc/controld/ctrld.toml
-    notify:
-      - restart ctrld
-  
-  - name: Start ctrld service
-    shell: |
-      sudo ctrld start
-    args:
-      executable: /bin/bash
-  
-  - name: Enable and start systemd service
-    service:
-      name: ctrld
-      enabled: yes
-      state: started
+- name: Include platform-specific variables
+  include_vars: "main.yml"
+
+- name: Detect router platform
+  set_fact:
+    is_router: "{{ ansible_hostname is match('^(RT-|GT-|AX|R[0-9]+|WRT)') or
+      ansible_board is defined or
+      ansible_system_vendor is match('(ASUS|Netgear|Linksys|Ubiquiti|MikroTik)') }}"
+    router_type:
+      "{{ 'asuswrt_merlin' if ansible_hostname is match('^(RT-|GT-|AX)')
+      else 'freshtomato' if ansible_system == 'Linux' and ansible_board is defined
+      else 'openwrt' if ansible_system == 'Linux' and '/etc/openwrt_release' is file
+      else 'edgeos' if '/opt/vyatta' is directory
+      else 'mikrotik' if ansible_system_vendor is match('MikroTik')
+      else 'generic' }}"
+
+- name: Override paths for router installations
+  set_fact:
+    ctrld_binary_path: "{{ router_paths[router_type].binary_path }}"
+    ctrld_config_dir: "{{ router_paths[router_type].config_dir }}"
+    ctrld_config_file: "{{ router_paths[router_type].config_file }}"
+  when: is_router | bool and router_type in router_paths
+
+- name: Check if ctrld is already installed
+  stat:
+    path: "{{ ctrld_binary_path }}"
+  register: ctrld_binary_stat
+
+- name: Get installed ctrld version
+  command: "{{ ctrld_binary_path }} --version"
+  register: ctrld_current_version
+  failed_when: false
+  changed_when: false
+  when: ctrld_binary_stat.stat.exists
+
+- name: Create ctrld user (Linux/macOS)
+  user:
+    name: controld
+    system: yes
+    shell: /bin/false
+    home: "{{ ctrld_config_dir }}"
+    create_home: no
+  when:
+    - ansible_system in ['Linux', 'Darwin']
+    - not is_router | bool
+    - ctrld_defaults.create_user | bool
+  become: yes
+
+- name: Create ctrld directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ctrld_service_user if ansible_system != 'Windows' else omit }}"
+    group: "{{ ctrld_service_user if ansible_system != 'Windows' else omit }}"
+    mode: "0755"
+  loop:
+    - "{{ ctrld_config_dir }}"
+    - "{{ ctrld_log_dir }}"
+    - "{{ ctrld_binary_path | dirname }}"
+  become: yes
+
+- name: Download ctrld installer (Linux/macOS)
+  get_url:
+    url: "{{ ctrld_download_url }}"
+    dest: "/tmp/ctrld_installer.sh"
+    mode: "0755"
+    force: yes
+    timeout: 30
+  when: ansible_system in ['Linux', 'Darwin']
+  register: ctrld_installer_download
+
+- name: Install/Update ctrld via installer script
+  command: >
+    /tmp/ctrld_installer.sh
+    {{ resolver_id | default('') }}
+    {{ 'forced' if ctrld_defaults.force_install | default(false) else '' }}
+  environment:
+    CTRLD_INSTALL_PATH: "{{ ctrld_binary_path | dirname }}"
+    CTRLD_CONFIG_PATH: "{{ ctrld_config_dir }}"
+  register: ctrld_install_result
+  changed_when: "'installed' in ctrld_install_result.stdout.lower() or 'updated' in ctrld_install_result.stdout.lower()"
+  when:
+    - ansible_system in ['Linux', 'Darwin']
+    - ctrld_installer_download is succeeded
+  become: yes
+  notify:
+    - restart ctrld
+
+- name: Install ctrld on Windows
+  ansible.windows.win_shell: |
+    (Invoke-WebRequest -Uri 'https://api.controld.com/dl/ps1' -UseBasicParsing).Content | Set-Content "$env:TEMP\ctrld_install.ps1"
+    Invoke-Expression "& '$env:TEMP\ctrld_install.ps1'"
+  when: ansible_system == 'Windows'
+  register: ctrld_install_windows
+  changed_when: "'installed' in ctrld_install_windows.stdout.lower() or 'updated' in ctrld_install_windows.stdout.lower()"
+
+- name: Handle router-specific installation
+  include_tasks: router.yml
+  when: is_router | bool
+
+- name: Verify ctrld installation
+  command: "{{ ctrld_binary_path }} --version"
+  register: ctrld_version_check
+  changed_when: false
+  failed_when: ctrld_version_check.rc != 0
+
+- name: Display installed ctrld version
+  debug:
+    msg: "ctrld version: {{ ctrld_version_check.stdout }}"
+
+- name: Generate ctrld configuration from template
+  template:
+    src: ctrld.toml.j2
+    dest: "{{ ctrld_config_file }}"
+    owner: "{{ ctrld_service_user if ansible_system != 'Windows' else omit }}"
+    group: "{{ ctrld_service_user if ansible_system != 'Windows' else omit }}"
+    mode: "0644"
+    backup: "{{ ctrld_defaults.backup_config | bool }}"
+    validate: "{{ ctrld_binary_path }} run --config %s --test"
+  become: yes
+  notify:
+    - restart ctrld
+  tags: config
+  when: ctrld_defaults.validate_config | bool
+
+- name: Generate ctrld configuration without validation
+  template:
+    src: ctrld.toml.j2
+    dest: "{{ ctrld_config_file }}"
+    owner: "{{ ctrld_service_user if ansible_system != 'Windows' else omit }}"
+    group: "{{ ctrld_service_user if ansible_system != 'Windows' else omit }}"
+    mode: "0644"
+    backup: "{{ ctrld_defaults.backup_config | bool }}"
+  become: yes
+  notify:
+    - restart ctrld
+  tags: config
+  when: not ctrld_defaults.validate_config | bool
+
+- name: Create systemd service file (Linux)
+  template:
+    src: ctrld.service.j2
+    dest: "/etc/systemd/system/{{ ctrld_service_name }}.service"
+    mode: "0644"
+  when:
+    - ansible_system == 'Linux'
+    - ansible_service_mgr == 'systemd'
+    - not is_router | bool
+  become: yes
+  notify:
+    - reload systemd
+    - restart ctrld
+
+- name: Create launchd plist (macOS)
+  template:
+    src: ctrld.plist.j2
+    dest: "/Library/LaunchDaemons/{{ ctrld_service_name }}.plist"
+    mode: "0644"
+  when:
+    - ansible_system == 'Darwin'
+    - not is_router | bool
+  become: yes
+  notify:
+    - restart ctrld darwin
+
+- name: Enable and start ctrld service (Linux)
+  systemd:
+    name: "{{ ctrld_service_name }}"
+    enabled: "{{ ctrld_defaults.enable_service | bool }}"
+    state: "{{ 'started' if ctrld_defaults.start_service | bool else 'stopped' }}"
+    daemon_reload: yes
+  when:
+    - ansible_system == 'Linux'
+    - ansible_service_mgr == 'systemd'
+    - not is_router | bool
+  become: yes
+
+- name: Enable and start ctrld service (macOS)
+  command: "launchctl {{ item }} /Library/LaunchDaemons/{{ ctrld_service_name }}.plist"
+  loop:
+    - "load"
+    - "start"
+  when:
+    - ansible_system == 'Darwin'
+    - not is_router | bool
+    - ctrld_defaults.start_service | bool
+  become: yes
+
+- name: Install and start ctrld service (Windows)
+  ansible.windows.win_service:
+    name: "{{ ctrld_service_name }}"
+    path: "{{ ctrld_binary_path }}"
+    start_mode: auto
+    state: started
+  when:
+    - ansible_system == 'Windows'
+    - ctrld_defaults.start_service | bool
+
+- name: Clean up installer script
+  file:
+    path: "/tmp/ctrld_installer.sh"
+    state: absent
+  when: ansible_system in ['Linux', 'Darwin']
+
+- name: Clean up Windows installer script
+  ansible.windows.win_file:
+    path: "{{ ansible_env.TEMP }}\\ctrld_install.ps1"
+    state: absent
+  when: ansible_system == 'Windows'
+
+- name: Set up log rotation (Linux)
+  template:
+    src: ctrld.logrotate.j2
+    dest: /etc/logrotate.d/ctrld
+    mode: "0644"
+  when:
+    - ansible_system == 'Linux'
+    - not is_router | bool
+  become: yes
+
+- name: Verify ctrld service is running
+  command: "{{ ctrld_binary_path }} status"
+  register: ctrld_status_check
+  changed_when: false
+  failed_when: false
+  when: ctrld_defaults.start_service | bool
+
+- name: Display ctrld service status
+  debug:
+    msg: "ctrld service status: {{ ctrld_status_check.stdout if ctrld_status_check is defined else 'Not checked' }}"

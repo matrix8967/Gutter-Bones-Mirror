@@ -1,0 +1,579 @@
+---
+# Network Topology Discovery and Mapping Role
+# Automated discovery of network infrastructure for testing scenarios
+# Designed to map network topology for ctrld deployment planning
+
+- name: Initialize network discovery session
+  set_fact:
+    discovery_session_id: "{{ ansible_date_time.iso8601_basic_short }}-discovery-{{ ansible_hostname }}"
+    discovery_start_time: "{{ ansible_date_time.epoch }}"
+    network_topology: {}
+    discovered_devices: []
+    network_segments: []
+    dns_infrastructure: []
+
+- name: Create network discovery results directory
+  file:
+    path: "{{ discovery_results_dir | default('/tmp/gutter_bonez_discovery') }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Gather comprehensive network facts
+  setup:
+    gather_subset:
+      - network
+      - hardware
+    filter: "*"
+
+- name: Detect current network environment
+  set_fact:
+    network_environment:
+      primary_interface: "{{ ansible_default_ipv4.interface | default('unknown') }}"
+      primary_ip: "{{ ansible_default_ipv4.address | default('unknown') }}"
+      primary_netmask: "{{ ansible_default_ipv4.netmask | default('unknown') }}"
+      primary_network: "{{ ansible_default_ipv4.network | default('unknown') }}"
+      default_gateway: "{{ ansible_default_ipv4.gateway | default('unknown') }}"
+      dns_nameservers: "{{ ansible_dns.nameservers | default([]) }}"
+      search_domains: "{{ ansible_dns.search | default([]) }}"
+      all_interfaces: "{{ ansible_interfaces | default([]) }}"
+      darkfort_subnet: "{{
+        'production' if ansible_default_ipv4.network == '10.10.10.0'
+        else 'lab' if ansible_default_ipv4.network == '10.20.20.0'
+        else 'dmz' if ansible_default_ipv4.network == '10.30.30.0'
+        else 'unknown'
+      }}"
+      expected_gateway: "{{
+        '10.10.10.1' if ansible_default_ipv4.network == '10.10.10.0'
+        else '10.20.20.1' if ansible_default_ipv4.network == '10.20.20.0'
+        else '10.30.30.1' if ansible_default_ipv4.network == '10.30.30.0'
+        else 'unknown'
+      }}"
+
+- name: Calculate network segments from interfaces
+  set_fact:
+    network_segments: "{{ network_segments + [segment] }}"
+  vars:
+    segment:
+      interface: "{{ item }}"
+      ip_address: "{{ hostvars[inventory_hostname]['ansible_' + item].ipv4.address | default('N/A') }}"
+      netmask: "{{ hostvars[inventory_hostname]['ansible_' + item].ipv4.netmask | default('N/A') }}"
+      network: "{{ hostvars[inventory_hostname]['ansible_' + item].ipv4.network | default('N/A') }}"
+      broadcast: "{{ hostvars[inventory_hostname]['ansible_' + item].ipv4.broadcast | default('N/A') }}"
+      mac_address: "{{ hostvars[inventory_hostname]['ansible_' + item].macaddress | default('N/A') }}"
+      mtu: "{{ hostvars[inventory_hostname]['ansible_' + item].mtu | default('N/A') }}"
+      active: "{{ hostvars[inventory_hostname]['ansible_' + item].active | default(false) }}"
+      type: "{{ hostvars[inventory_hostname]['ansible_' + item].type | default('unknown') }}"
+  loop: "{{ ansible_interfaces }}"
+  when:
+    - hostvars[inventory_hostname]['ansible_' + item] is defined
+    - hostvars[inventory_hostname]['ansible_' + item].ipv4 is defined
+    - hostvars[inventory_hostname]['ansible_' + item].ipv4.address is defined
+
+- name: Discover network gateway information
+  block:
+    - name: Get detailed gateway information (Linux)
+      shell: |
+        echo "=== ROUTING TABLE ==="
+        ip route show
+        echo ""
+        echo "=== ARP TABLE ==="
+        ip neigh show
+        echo ""
+        echo "=== GATEWAY DETAILS ==="
+        ping -c 1 -W 2 {{ network_environment.default_gateway }} 2>/dev/null && echo "Gateway responsive" || echo "Gateway not responding"
+      register: gateway_discovery_linux
+      changed_when: false
+      failed_when: false
+      when: ansible_system == 'Linux'
+
+    - name: Get gateway MAC address
+      shell: "arp -n {{ network_environment.default_gateway }} | awk 'NR==2{print $3}' || ip neigh show {{ network_environment.default_gateway }} | awk '{print $5}'"
+      register: gateway_mac
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - network_environment.default_gateway != 'unknown'
+
+    - name: Attempt gateway device identification
+      shell: |
+        # Try to identify router/gateway device
+        nmap -sn {{ network_environment.default_gateway }} 2>/dev/null | grep -i "mac address" ||
+        curl -s --connect-timeout 3 http://{{ network_environment.default_gateway }} | head -20 | grep -i "title\|server" ||
+        echo "Unable to identify gateway device"
+      register: gateway_identification
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - network_environment.default_gateway != 'unknown'
+
+- name: Network scanning and device discovery
+  block:
+    - name: Install network scanning tools (if missing)
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - nmap
+        - net-tools
+        - dnsutils
+      failed_when: false
+      when: ansible_system == 'Linux'
+      become: yes
+
+    - name: Scan darkfort network segment for active devices
+      shell: |
+        # Scan current subnet based on darkfort network topology
+        case "{{ network_environment.darkfort_subnet }}" in
+          "production")
+            network_range="10.10.10.1-254"
+            echo "=== Scanning Production Network (10.10.10.0/24) ==="
+            ;;
+          "lab")
+            network_range="10.20.20.1-254"
+            echo "=== Scanning Lab Network (10.20.20.0/24) ==="
+            ;;
+          "dmz")
+            network_range="10.30.30.1-254"
+            echo "=== Scanning DMZ Network (10.30.30.0/24) ==="
+            ;;
+          *)
+            network_base=$(echo {{ network_environment.primary_network }} | cut -d'.' -f1-3)
+            network_range="${network_base}.1-254"
+            echo "=== Scanning Unknown Network ==="
+            ;;
+        esac
+
+        nmap -sn $network_range 2>/dev/null | grep -E "(Nmap scan report|MAC Address)" |
+        while read line; do
+          if echo "$line" | grep -q "Nmap scan report"; then
+            ip=$(echo "$line" | awk '{print $5}' | tr -d '()')
+            # Add darkfort-specific device identification
+            case "$ip" in
+              "10.10.10.1") echo "IP: $ip (EdgeRouter 8 Pro - Primary Gateway)" ;;
+              "10.10.10.53") echo "IP: $ip (Primary DNS Server)" ;;
+              "10.10.10.40") echo "IP: $ip (Monitoring Server)" ;;
+              "10.10.10.30") echo "IP: $ip (UniFi Controller)" ;;
+              "10.20.20.1") echo "IP: $ip (Lab Gateway/Router)" ;;
+              "10.30.30.1") echo "IP: $ip (DMZ Gateway)" ;;
+              *) echo "IP: $ip" ;;
+            esac
+          elif echo "$line" | grep -q "MAC Address"; then
+            mac=$(echo "$line" | awk '{print $3}')
+            vendor=$(echo "$line" | cut -d'(' -f2 | cut -d')' -f1)
+            echo "MAC: $mac Vendor: $vendor"
+            echo "---"
+          fi
+        done
+      register: network_scan
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - network_environment.primary_network != 'unknown'
+      timeout: 120
+
+    - name: Parse discovered network devices
+      set_fact:
+        discovered_devices: "{{ discovered_devices + [device_info] }}"
+      vars:
+        device_lines: "{{ network_scan.stdout_lines | default([]) }}"
+        device_info:
+          ip: "{{ item | regex_search('IP: (.+)', '\\1') | first | default('unknown') }}"
+          mac: "{{ (device_lines[device_lines.index(item) + 1] | regex_search('MAC: ([^ ]+)', '\\1') | first) if (device_lines.index(item) + 1 < device_lines | length) and ('MAC:' in device_lines[device_lines.index(item) + 1]) else 'unknown' }}"
+          vendor: "{{ (device_lines[device_lines.index(item) + 1] | regex_search('Vendor: (.+)', '\\1') | first) if (device_lines.index(item) + 1 < device_lines | length) and ('Vendor:' in device_lines[device_lines.index(item) + 1]) else 'unknown' }}"
+          discovered_at: "{{ ansible_date_time.iso8601 }}"
+      loop: "{{ network_scan.stdout_lines | default([]) | select('match', '^IP:') | list }}"
+      when: network_scan.stdout_lines is defined
+
+- name: DNS infrastructure discovery
+  block:
+    - name: Test current DNS resolvers
+      shell: |
+        echo "=== DARKFORT DNS CONFIGURATION ==="
+        cat /etc/resolv.conf
+        echo ""
+        echo "=== DARKFORT DNS INFRASTRUCTURE TESTING ==="
+
+        # Test darkfort-specific DNS servers
+        darkfort_dns_servers="10.10.10.53 10.10.10.1"
+
+        for ns in {{ network_environment.dns_nameservers | join(' ') }} $darkfort_dns_servers; do
+          echo "Testing nameserver: $ns"
+          case "$ns" in
+            "10.10.10.53") echo "  (Primary DNS Server - dns-primary.darkfort)" ;;
+            "10.10.10.1") echo "  (EdgeRouter 8 Pro Gateway)" ;;
+          esac
+
+          # Test basic resolution
+          dig @$ns google.com +short +time=3 +tries=1 2>/dev/null && echo "  ✓ Basic DNS responsive" || echo "  ✗ Basic DNS not responsive"
+
+          # Test Control D accessibility
+          dig @$ns verify.controld.com +short +time=3 +tries=1 2>/dev/null && echo "  ✓ Control D accessible" || echo "  ✗ Control D not accessible"
+
+          # Test darkfort domain resolution
+          dig @$ns gateway.darkfort +short +time=3 +tries=1 2>/dev/null && echo "  ✓ Darkfort domain resolving" || echo "  ✗ Darkfort domain not resolving"
+
+          echo ""
+        done
+      register: dns_resolver_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system == 'Linux'
+
+    - name: Discover darkfort DNS infrastructure
+      shell: |
+        echo "=== DARKFORT DNS INFRASTRUCTURE DISCOVERY ==="
+
+        # Known darkfort DNS infrastructure
+        darkfort_dns_targets="10.10.10.1 10.10.10.53 10.20.20.1 10.30.30.1"
+
+        for ip in $darkfort_dns_targets; do
+          echo "Testing potential DNS server: $ip"
+          case "$ip" in
+            "10.10.10.1") echo "  EdgeRouter 8 Pro (Primary Gateway)" ;;
+            "10.10.10.53") echo "  Primary DNS Server (dns-primary.darkfort)" ;;
+            "10.20.20.1") echo "  Lab Network Gateway" ;;
+            "10.30.30.1") echo "  DMZ Network Gateway" ;;
+          esac
+
+          if timeout 3 dig @$ip google.com +short >/dev/null 2>&1; then
+            echo "  ✓ DNS service active"
+            # Test for ctrld service
+            if timeout 3 dig @$ip verify.controld.com +short >/dev/null 2>&1; then
+              echo "  ✓ Control D service detected"
+            fi
+          else
+            echo "  ✗ No DNS service"
+          fi
+          echo ""
+        done
+
+        # Discovery on current subnet
+        network_base=$(echo {{ network_environment.primary_network }} | cut -d'.' -f1-3)
+        echo "=== SUBNET DNS SERVICE DISCOVERY ==="
+        for ip in ${network_base}.1 ${network_base}.254 {{ network_environment.default_gateway }}; do
+          if timeout 3 dig @$ip google.com +short >/dev/null 2>&1; then
+            echo "DNS server found at: $ip"
+            dig @$ip google.com | grep "SERVER:" || echo "  Server: $ip"
+          fi
+        done
+      register: dns_server_discovery
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - network_environment.primary_network != 'unknown'
+
+    - name: Test for DNS hijacking/interception in darkfort network
+      shell: |
+        echo "=== DARKFORT NETWORK DNS INTEGRITY CHECK ==="
+
+        # Test against darkfort DNS servers
+        primary_dns="{{ network_environment.dns_nameservers[0] | default('10.10.10.53') }}"
+
+        echo "Testing DNS integrity with primary server: $primary_dns"
+
+        # Test for captive portal DNS redirection
+        hijack_test=$(dig @$primary_dns nxdomain-test-$(date +%s).invalid +short 2>/dev/null | head -1)
+        if [ -n "$hijack_test" ]; then
+          echo "WARNING: Possible DNS hijacking detected - non-existent domain resolved to: $hijack_test"
+        else
+          echo "✓ No DNS hijacking detected"
+        fi
+
+        # Test darkfort domain resolution
+        echo "Testing darkfort domain resolution:"
+        dig @$primary_dns gateway.darkfort +short 2>/dev/null | head -1 | grep -q "10.10.10.1" && echo "✓ gateway.darkfort resolves correctly" || echo "✗ gateway.darkfort resolution issue"
+
+        # Test Control D filtering
+        echo "Testing Control D filtering:"
+        malware_test=$(dig @$primary_dns malware.testcategory.com +short 2>/dev/null | head -1)
+        if [ -n "$malware_test" ] && [ "$malware_test" != "0.0.0.0" ]; then
+          echo "⚠ Malware domain not blocked: $malware_test"
+        else
+          echo "✓ Malware domain properly blocked"
+        fi
+
+        # Test for forced SafeSearch
+        safesearch_test=$(dig @$primary_dns google.com +short 2>/dev/null)
+        echo "Google DNS resolution: $safesearch_test"
+      register: dns_hijacking_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system == 'Linux'
+
+- name: Router and network device fingerprinting
+  block:
+    - name: Fingerprint darkfort network infrastructure
+      shell: |
+        gateway="{{ network_environment.default_gateway }}"
+        expected_gateway="{{ network_environment.expected_gateway }}"
+
+        echo "=== DARKFORT NETWORK INFRASTRUCTURE FINGERPRINTING ==="
+        echo "Current Gateway: $gateway"
+        echo "Expected Gateway: $expected_gateway"
+        echo "Network Segment: {{ network_environment.darkfort_subnet }}"
+
+        if [ "$gateway" = "$expected_gateway" ]; then
+          echo "✓ Gateway matches expected darkfort topology"
+        else
+          echo "⚠ Gateway mismatch - expected: $expected_gateway, found: $gateway"
+        fi
+
+        # EdgeRouter 8 Pro specific checks
+        if [ "$gateway" = "10.10.10.1" ]; then
+          echo ""
+          echo "=== EDGEROUTER 8 PRO DETECTION ==="
+
+          # EdgeOS web interface
+          if timeout 3 curl -s --connect-timeout 2 -I https://$gateway 2>/dev/null | grep -i "ubiquiti\|edgeos"; then
+            echo "✓ EdgeOS web interface detected"
+          fi
+
+          # SSH banner
+          ssh_banner=$(timeout 3 ssh -o ConnectTimeout=2 -o BatchMode=yes $gateway exit 2>&1 | head -1)
+          echo "SSH Banner: $ssh_banner"
+
+          # UBNT discovery
+          if echo "$ssh_banner" | grep -i "ubnt\|edgeos"; then
+            echo "✓ Confirmed EdgeRouter device"
+          fi
+        fi
+
+        # Check other known infrastructure
+        echo ""
+        echo "=== DARKFORT INFRASTRUCTURE STATUS ==="
+        infrastructure_ips="10.10.10.30 10.10.10.40 10.10.10.53"
+        for ip in $infrastructure_ips; do
+          case "$ip" in
+            "10.10.10.30") device="UniFi Controller" ;;
+            "10.10.10.40") device="Monitoring Server" ;;
+            "10.10.10.53") device="Primary DNS Server" ;;
+          esac
+
+          if ping -c 1 -W 2 $ip >/dev/null 2>&1; then
+            echo "✓ $device ($ip) - Online"
+          else
+            echo "✗ $device ($ip) - Offline"
+          fi
+        done
+
+        # SNMP check for EdgeRouter
+        if command -v snmpget >/dev/null 2>&1 && [ "$gateway" = "10.10.10.1" ]; then
+          echo ""
+          echo "=== EDGEROUTER SNMP INFO ==="
+          snmpget -v2c -c public $gateway 1.3.6.1.2.1.1.1.0 2>/dev/null | head -1 || echo "SNMP not accessible with default community"
+        fi
+      register: router_fingerprinting
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - network_environment.default_gateway != 'unknown'
+
+    - name: Detect captive portal
+      uri:
+        url: "http://detectportal.firefox.com/canonical.html"
+        method: GET
+        timeout: 10
+        status_code: [200, 204, 302]
+      register: captive_portal_test
+      failed_when: false
+
+    - name: Test internet connectivity and filtering
+      shell: |
+        echo "=== INTERNET CONNECTIVITY TEST ==="
+        # Test basic connectivity
+        curl -s --connect-timeout 5 --max-time 10 http://httpbin.org/ip || echo "HTTP connectivity failed"
+        curl -s --connect-timeout 5 --max-time 10 https://httpbin.org/ip || echo "HTTPS connectivity failed"
+
+        # Test for content filtering
+        for category in malware ads adult gambling; do
+          test_url="${category}.testcategory.com"
+          response=$(curl -s --connect-timeout 3 --max-time 5 -I "http://$test_url" 2>/dev/null | head -1)
+          if echo "$response" | grep -q "200\|404"; then
+            echo "$category category: ACCESSIBLE"
+          else
+            echo "$category category: BLOCKED"
+          fi
+        done
+      register: connectivity_filtering_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system == 'Linux'
+
+- name: VLAN and network segmentation discovery
+  block:
+    - name: Check for VLAN interfaces
+      shell: |
+        echo "=== VLAN INTERFACE DISCOVERY ==="
+        ip link show | grep -E "@|vlan" | grep -v "lo:" || echo "No VLAN interfaces detected"
+
+        echo "=== BRIDGE INTERFACES ==="
+        ip link show type bridge 2>/dev/null || echo "No bridge interfaces"
+
+        echo "=== TUNNEL INTERFACES ==="
+        ip tunnel show 2>/dev/null || echo "No tunnel interfaces"
+      register: vlan_discovery
+      changed_when: false
+      failed_when: false
+      when: ansible_system == 'Linux'
+
+    - name: Network security scanning
+      shell: |
+        gateway="{{ network_environment.default_gateway }}"
+        echo "=== NETWORK SECURITY SCAN ==="
+
+        # Port scan gateway for common services
+        if command -v nmap >/dev/null 2>&1; then
+          nmap -Pn --top-ports 20 $gateway 2>/dev/null | grep -E "(open|filtered|closed)"
+        fi
+
+        # Check for IPv6
+        if ip addr show | grep -q inet6; then
+          echo "IPv6 is configured"
+          ping6 -c 1 -W 2 ::1 >/dev/null 2>&1 && echo "IPv6 loopback responsive"
+        else
+          echo "IPv6 not configured"
+        fi
+      register: security_scan
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - network_environment.default_gateway != 'unknown'
+
+- name: Compile comprehensive network topology
+  set_fact:
+    network_topology:
+      discovery_session: "{{ discovery_session_id }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      host_info:
+        hostname: "{{ ansible_hostname }}"
+        fqdn: "{{ ansible_fqdn | default('unknown') }}"
+        os_family: "{{ ansible_os_family }}"
+        distribution: "{{ ansible_distribution }}"
+        architecture: "{{ ansible_architecture }}"
+      network_environment: "{{ network_environment }}"
+      network_segments: "{{ network_segments }}"
+      discovered_devices: "{{ discovered_devices }}"
+      gateway_info:
+        ip: "{{ network_environment.default_gateway }}"
+        mac_address: "{{ gateway_mac.stdout | default('unknown') }}"
+        identification: "{{ gateway_identification.stdout_lines | default([]) }}"
+        fingerprint: "{{ router_fingerprinting.stdout_lines | default([]) }}"
+      dns_infrastructure:
+        current_resolvers: "{{ network_environment.dns_nameservers }}"
+        resolver_tests: "{{ dns_resolver_test.stdout_lines | default([]) }}"
+        discovered_servers: "{{ dns_server_discovery.stdout_lines | default([]) }}"
+        hijacking_test: "{{ dns_hijacking_test.stdout_lines | default([]) }}"
+      security_assessment:
+        captive_portal: "{{ captive_portal_test.status | default('unknown') }}"
+        connectivity_filtering: "{{ connectivity_filtering_test.stdout_lines | default([]) }}"
+        open_ports: "{{ security_scan.stdout_lines | default([]) }}"
+        vlan_config: "{{ vlan_discovery.stdout_lines | default([]) }}"
+      recommendations: []
+
+- name: Generate network discovery recommendations
+  set_fact:
+    network_topology: "{{ network_topology | combine({'recommendations': recommendations}) }}"
+  vars:
+    recommendations: >-
+      {{
+        (['Configure ctrld as primary DNS resolver'] if network_environment.dns_nameservers | length > 0 else []) +
+        (['Consider VLAN segmentation for testing'] if discovered_devices | length > 10 else []) +
+        (['Investigate DNS hijacking'] if dns_hijacking_test.stdout is defined and 'hijacking detected' in dns_hijacking_test.stdout else []) +
+        (['Configure firewall rules for ctrld'] if security_scan.stdout is defined and '53/tcp' in security_scan.stdout else []) +
+        (['Set up monitoring for gateway connectivity'] if gateway_mac.stdout | default('') == '' else []) +
+        (['Enable IPv6 support'] if 'IPv6 not configured' in security_scan.stdout | default('') else [])
+      }}
+
+- name: Generate network topology map
+  template:
+    src: network_topology.j2
+    dest: "{{ discovery_results_dir }}/{{ discovery_session_id }}_topology.json"
+    mode: '0644'
+  delegate_to: localhost
+  vars:
+    topology_data: "{{ network_topology }}"
+
+- name: Generate network diagram data
+  copy:
+    content: |
+      # Network Topology Diagram Data
+      # Generated by Gutter Bonez Network Discovery
+      # Session: {{ discovery_session_id }}
+
+      ## Host: {{ ansible_hostname }}
+      - IP: {{ network_environment.primary_ip }}
+      - Interface: {{ network_environment.primary_interface }}
+      - Gateway: {{ network_environment.default_gateway }}
+
+      ## Network Segments:
+      {% for segment in network_segments %}
+      - {{ segment.interface }}: {{ segment.ip_address }}/{{ segment.netmask }} ({{ segment.type }})
+      {% endfor %}
+
+      ## Discovered Devices:
+      {% for device in discovered_devices %}
+      - {{ device.ip }} ({{ device.vendor }}) - {{ device.mac }}
+      {% endfor %}
+
+      ## DNS Infrastructure:
+      {% for resolver in network_environment.dns_nameservers %}
+      - DNS: {{ resolver }}
+      {% endfor %}
+
+      ## Recommendations:
+      {% for recommendation in network_topology.recommendations %}
+      - {{ recommendation }}
+      {% endfor %}
+    dest: "{{ discovery_results_dir }}/{{ discovery_session_id }}_diagram.md"
+    mode: '0644'
+  delegate_to: localhost
+
+- name: Display network discovery summary
+  debug:
+    msg: |
+      🗺️ Network Discovery Complete: {{ discovery_session_id }}
+
+      🏠 Darkfort Host Information:
+      ├── Hostname: {{ ansible_hostname }}.{{ domain_name }}
+      ├── Primary IP: {{ network_environment.primary_ip }}
+      ├── Network Segment: {{ network_environment.darkfort_subnet | title }}
+      ├── Gateway: {{ network_environment.default_gateway }} ({{ 'Expected' if network_environment.default_gateway == network_environment.expected_gateway else 'Unexpected' }})
+      └── DNS Servers: {{ network_environment.dns_nameservers | join(', ') }}
+
+      🔍 Discovery Results:
+      ├── Network Segments: {{ network_segments | length }}
+      ├── Active Devices: {{ discovered_devices | length }}
+      ├── DNS Infrastructure: {{ network_environment.dns_nameservers | length }} servers tested
+      ├── Darkfort Domain: {{ 'Resolving' if 'gateway.darkfort' in ansible_hostname else 'Unknown' }}
+      └── Security Checks: {{ 'Completed' if security_scan is defined else 'Skipped' }}
+
+      💡 Darkfort Network Recommendations:
+      {% for rec in network_topology.recommendations %}
+      ├── {{ rec }}
+      {% endfor %}
+      {% if network_environment.darkfort_subnet == 'unknown' %}
+      ├── Verify network segment configuration
+      ├── Check VLAN assignments for darkfort topology
+      {% endif %}
+      {% if network_environment.default_gateway != network_environment.expected_gateway %}
+      ├── Gateway mismatch detected - verify routing configuration
+      {% endif %}
+
+      📋 Reports Generated:
+      ├── Topology: {{ discovery_results_dir }}/{{ discovery_session_id }}_topology.json
+      └── Diagram: {{ discovery_results_dir }}/{{ discovery_session_id }}_diagram.md
+
+- name: Export discovery results for other playbooks
+  set_fact:
+    gutter_bonez_network_topology: "{{ network_topology }}"
+    gutter_bonez_discovered_devices: "{{ discovered_devices }}"
+    gutter_bonez_network_segments: "{{ network_segments }}"
+  when: export_discovery_results | default(true) | bool

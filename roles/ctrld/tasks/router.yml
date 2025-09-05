@@ -1,0 +1,279 @@
+---
+- name: Install ctrld on ASUSWRT-Merlin
+  block:
+    - name: Check if JFFS is mounted (ASUSWRT-Merlin)
+      raw: mount | grep jffs
+      register: jffs_mount_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create JFFS directories (ASUSWRT-Merlin)
+      raw: mkdir -p {{ ctrld_config_dir }} {{ ctrld_binary_path | dirname }}
+      changed_when: false
+
+    - name: Check if ctrld binary exists (ASUSWRT-Merlin)
+      raw: test -f {{ ctrld_binary_path }}
+      register: ctrld_binary_exists
+      failed_when: false
+      changed_when: false
+
+    - name: Download ctrld binary for ASUSWRT-Merlin
+      raw: >
+        cd {{ ctrld_binary_path | dirname }} &&
+        curl -sL https://api.controld.com/dl |
+        CTRLD_INSTALL_PATH={{ ctrld_binary_path | dirname }} sh
+      when: ctrld_binary_exists.rc != 0
+      register: ctrld_download_merlin
+
+    - name: Set executable permissions on ctrld binary
+      raw: chmod +x {{ ctrld_binary_path }}
+      when: ctrld_download_merlin is changed
+
+    - name: Create ctrld config from template (ASUSWRT-Merlin)
+      template:
+        src: ctrld.toml.j2
+        dest: "{{ ctrld_config_file }}"
+        mode: '0644'
+
+    - name: Create services-start script directory
+      raw: mkdir -p /jffs/scripts
+      changed_when: false
+
+    - name: Check if services-start exists
+      raw: test -f /jffs/scripts/services-start
+      register: services_start_exists
+      failed_when: false
+      changed_when: false
+
+    - name: Create services-start script
+      raw: |
+        cat > /jffs/scripts/services-start << 'EOF'
+        #!/bin/sh
+        # ASUSWRT-Merlin services-start script
+        EOF
+      when: services_start_exists.rc != 0
+
+    - name: Set executable permissions on services-start
+      raw: chmod +x /jffs/scripts/services-start
+
+    - name: Add ctrld to router startup
+      lineinfile:
+        path: /jffs/scripts/services-start
+        line: "{{ ctrld_binary_path }} start --cd={{ resolver_id }} >/dev/null 2>&1 &"
+        regexp: ".*ctrld start.*"
+        create: yes
+        mode: '0755'
+
+    - name: Start ctrld service (ASUSWRT-Merlin)
+      raw: "{{ ctrld_binary_path }} start --cd={{ resolver_id }} >/dev/null 2>&1 &"
+      async: 10
+      poll: 0
+      when: ctrld_defaults.start_service | bool
+
+  when: router_type == 'asuswrt_merlin'
+
+- name: Install ctrld on FreshTomato
+  block:
+    - name: Create JFFS directories (FreshTomato)
+      raw: mkdir -p {{ ctrld_config_dir }} {{ ctrld_binary_path | dirname }}
+      changed_when: false
+
+    - name: Download ctrld binary for FreshTomato
+      raw: >
+        cd {{ ctrld_binary_path | dirname }} &&
+        curl -sL https://api.controld.com/dl |
+        CTRLD_INSTALL_PATH={{ ctrld_binary_path | dirname }} sh
+      register: ctrld_download_tomato
+
+    - name: Set executable permissions on ctrld binary
+      raw: chmod +x {{ ctrld_binary_path }}
+      when: ctrld_download_tomato is changed
+
+    - name: Create ctrld config from template (FreshTomato)
+      template:
+        src: ctrld.toml.j2
+        dest: "{{ ctrld_config_file }}"
+        mode: '0644'
+
+    - name: Add ctrld to router startup script (FreshTomato)
+      raw: |
+        nvram set script_init="$(nvram get script_init)
+        {{ ctrld_binary_path }} start --cd={{ resolver_id }} >/dev/null 2>&1 &"
+        nvram commit
+
+    - name: Start ctrld service (FreshTomato)
+      raw: "{{ ctrld_binary_path }} start --cd={{ resolver_id }} >/dev/null 2>&1 &"
+      async: 10
+      poll: 0
+      when: ctrld_defaults.start_service | bool
+
+  when: router_type == 'freshtomato'
+
+- name: Install ctrld on OpenWrt
+  block:
+    - name: Update opkg package list
+      raw: opkg update
+      register: opkg_update
+      failed_when: false
+      changed_when: "'Updated' in opkg_update.stdout"
+
+    - name: Install curl if not present (OpenWrt)
+      raw: opkg install curl
+      register: curl_install
+      failed_when: false
+      changed_when: "'Installing' in curl_install.stdout"
+
+    - name: Create directories (OpenWrt)
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ ctrld_config_dir }}"
+        - "{{ ctrld_binary_path | dirname }}"
+
+    - name: Install ctrld binary (OpenWrt)
+      shell: >
+        curl -sL https://api.controld.com/dl |
+        CTRLD_INSTALL_PATH={{ ctrld_binary_path | dirname }} sh
+      args:
+        creates: "{{ ctrld_binary_path }}"
+      register: ctrld_install_openwrt
+
+    - name: Set executable permissions
+      file:
+        path: "{{ ctrld_binary_path }}"
+        mode: '0755'
+      when: ctrld_install_openwrt is changed
+
+    - name: Create ctrld config (OpenWrt)
+      template:
+        src: ctrld.toml.j2
+        dest: "{{ ctrld_config_file }}"
+        mode: '0644'
+
+    - name: Create OpenWrt init script
+      template:
+        src: ctrld.init.j2
+        dest: /etc/init.d/ctrld
+        mode: '0755'
+      notify:
+        - enable ctrld openwrt
+        - start ctrld openwrt
+
+  when: router_type == 'openwrt'
+
+- name: Install ctrld on EdgeOS/VyOS
+  block:
+    - name: Create directories (EdgeOS)
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      loop:
+        - "{{ ctrld_config_dir }}"
+        - "{{ ctrld_binary_path | dirname }}"
+
+    - name: Download ctrld installer (EdgeOS)
+      get_url:
+        url: "{{ ctrld_download_url }}"
+        dest: "/tmp/ctrld_installer.sh"
+        mode: '0755'
+        timeout: 30
+
+    - name: Install ctrld (EdgeOS)
+      command: >
+        /tmp/ctrld_installer.sh
+        {{ resolver_id | default('') }}
+        {{ 'forced' if ctrld_defaults.force_install else '' }}
+      environment:
+        CTRLD_INSTALL_PATH: "{{ ctrld_binary_path | dirname }}"
+        CTRLD_CONFIG_PATH: "{{ ctrld_config_dir }}"
+      register: ctrld_install_edgeos
+      changed_when: "'installed' in ctrld_install_edgeos.stdout.lower() or 'updated' in ctrld_install_edgeos.stdout.lower()"
+
+    - name: Create ctrld config (EdgeOS)
+      template:
+        src: ctrld.toml.j2
+        dest: "{{ ctrld_config_file }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Create systemd service for EdgeOS
+      template:
+        src: ctrld.service.j2
+        dest: "/etc/systemd/system/{{ ctrld_service_name }}.service"
+        mode: '0644'
+      notify:
+        - reload systemd
+        - enable ctrld edgeos
+        - start ctrld edgeos
+
+    - name: Clean up installer
+      file:
+        path: "/tmp/ctrld_installer.sh"
+        state: absent
+
+  when: router_type == 'edgeos'
+
+- name: Install ctrld on MikroTik RouterOS
+  block:
+    - name: Create system directories (MikroTik)
+      raw: /file print file=dummy.txt; /file remove dummy.txt
+      changed_when: false
+
+    - name: Upload ctrld binary to MikroTik
+      copy:
+        src: "{{ ctrld_binary_local_path | default('files/ctrld-mips') }}"
+        dest: "{{ ctrld_binary_path }}"
+        mode: '0755'
+      when: ctrld_binary_local_path is defined
+
+    - name: Download ctrld for MikroTik (if no local binary)
+      raw: >
+        /tool fetch
+        url=https://api.controld.com/dl/mips
+        dst-path={{ ctrld_binary_path }}
+      when: ctrld_binary_local_path is not defined
+      register: mikrotik_download
+
+    - name: Create ctrld config (MikroTik)
+      template:
+        src: ctrld.toml.j2
+        dest: "{{ ctrld_config_file }}"
+        mode: '0644'
+
+    - name: Add ctrld to RouterOS scheduler
+      raw: >
+        /system scheduler add
+        name=ctrld-startup
+        start-time=startup
+        on-event="{{ ctrld_binary_path }} start --cd={{ resolver_id }}"
+      register: scheduler_add
+      failed_when: false
+      changed_when: "'failure' not in scheduler_add.stdout"
+
+    - name: Start ctrld service (MikroTik)
+      raw: "{{ ctrld_binary_path }} start --cd={{ resolver_id }} &"
+      async: 10
+      poll: 0
+      when: ctrld_defaults.start_service | bool
+
+  when: router_type == 'mikrotik'
+
+- name: Verify router ctrld installation
+  command: "{{ ctrld_binary_path }} --version"
+  register: router_ctrld_version
+  changed_when: false
+  failed_when: false
+
+- name: Display router ctrld installation status
+  debug:
+    msg: |
+      Router type: {{ router_type }}
+      ctrld binary: {{ ctrld_binary_path }}
+      ctrld config: {{ ctrld_config_file }}
+      Version: {{ router_ctrld_version.stdout if router_ctrld_version.rc == 0 else 'Installation may have failed' }}

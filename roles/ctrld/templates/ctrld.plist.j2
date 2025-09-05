@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{{ ctrld_service_name }}</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{ ctrld_binary_path }}</string>
+        <string>run</string>
+        <string>--config</string>
+        <string>{{ ctrld_config_file }}</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>UserName</key>
+    <string>{{ ctrld_service_user }}</string>
+
+    <key>GroupName</key>
+    <string>{{ ctrld_service_user }}</string>
+
+    <key>WorkingDirectory</key>
+    <string>{{ ctrld_config_dir }}</string>
+
+    <key>StandardOutPath</key>
+    <string>{{ ctrld_log_dir }}/ctrld.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>{{ ctrld_log_dir }}/ctrld.error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CTRLD_CONFIG_PATH</key>
+        <string>{{ ctrld_config_dir }}</string>
+        <key>CTRLD_LOG_LEVEL</key>
+        <string>{{ ctrld_log_level | default('info') }}</string>
+        {% if resolver_id is defined %}
+        <key>CTRLD_RESOLVER_ID</key>
+        <string>{{ resolver_id }}</string>
+        {% endif %}
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>ExitTimeOut</key>
+    <integer>10</integer>
+
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>1024</integer>
+    </dict>
+
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>1024</integer>
+    </dict>
+</dict>
+</plist>

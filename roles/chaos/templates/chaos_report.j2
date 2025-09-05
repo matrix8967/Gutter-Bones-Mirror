@@ -1,0 +1,149 @@
+{
+  "chaos_engineering_report": {
+    "session_info": {
+      "session_id": "{{ chaos_summary.session_id }}",
+      "hostname": "{{ chaos_summary.hostname }}",
+      "start_time": {{ chaos_summary.start_time }},
+      "end_time": {{ chaos_summary.end_time }},
+      "duration_seconds": {{ chaos_summary.duration }},
+      "start_timestamp": "{{ chaos_summary.start_time | int | strftime('%Y-%m-%d %H:%M:%S UTC') }}",
+      "end_timestamp": "{{ chaos_summary.end_time | int | strftime('%Y-%m-%d %H:%M:%S UTC') }}"
+    },
+    "system_info": {
+      "os_family": "{{ ansible_os_family | default('unknown') }}",
+      "distribution": "{{ ansible_distribution | default('unknown') }}",
+      "distribution_version": "{{ ansible_distribution_version | default('unknown') }}",
+      "architecture": "{{ ansible_architecture | default('unknown') }}",
+      "kernel": "{{ ansible_kernel | default('unknown') }}",
+      "virtualization_type": "{{ ansible_virtualization_type | default('physical') }}",
+      "virtualization_role": "{{ ansible_virtualization_role | default('host') }}"
+    },
+    "network_environment": {
+      "primary_interface": "{{ ansible_default_ipv4.interface | default('unknown') }}",
+      "primary_ip": "{{ ansible_default_ipv4.address | default('unknown') }}",
+      "default_gateway": "{{ ansible_default_ipv4.gateway | default('unknown') }}",
+      "dns_nameservers": {{ ansible_dns.nameservers | default([]) | to_json }}
+    },
+    "baseline_measurements": {{ chaos_summary.baseline | default({}) | to_json }},
+    "experiment_summary": {
+      "total_experiments": {{ chaos_summary.total_experiments }},
+      "successful_experiments": {{ chaos_summary.successful_experiments }},
+      "failed_experiments": {{ chaos_summary.failed_experiments }},
+      "success_rate": "{{ ((chaos_summary.successful_experiments / chaos_summary.total_experiments) * 100) | round(2) if chaos_summary.total_experiments > 0 else 0 }}%"
+    },
+    "experiments": [
+{% for result in chaos_summary.results %}
+      {
+        "experiment_name": "{{ result.experiment }}",
+        "timestamp": "{{ result.timestamp }}",
+        "status": "{{ result.status }}",
+        "parameters": {{ result.parameters | default({}) | to_json }},
+        "results": {{ result.results | default({}) | to_json }},
+        "duration": "{{ result.duration | default('unknown') }}",
+        "impact_assessment": {
+          "service_availability": "{{ 'maintained' if result.results.service_recovered | default(false) else 'degraded' }}",
+          "dns_functionality": "{{ 'functional' if result.results.recovery_dns_working | default(false) else 'impaired' }}",
+          "recovery_time": "{{ result.results.recovery_time | default('unknown') }}"
+        }
+      }{% if not loop.last %},{% endif %}
+{% endfor %}
+    ],
+    "system_resilience": {
+      "dns_service_resilience": {
+        "service_restart_recovery": "{{ chaos_summary.results | selectattr('experiment', 'equalto', 'dns_service_disruption') | map(attribute='results.service_recovered') | first | default('unknown') }}",
+        "fallback_dns_functional": "{{ chaos_summary.results | selectattr('experiment', 'equalto', 'dns_service_disruption') | map(attribute='results.fallback_dns_working') | first | default('unknown') }}",
+        "recovery_validation": "{{ chaos_summary.results | selectattr('experiment', 'equalto', 'dns_service_disruption') | map(attribute='results.recovery_dns_working') | first | default('unknown') }}"
+      },
+      "network_resilience": {
+        "latency_tolerance": "{{ chaos_summary.results | selectattr('experiment', 'equalto', 'network_latency_injection') | map(attribute='status') | first | default('unknown') }}",
+        "packet_loss_handling": "{{ chaos_summary.results | selectattr('experiment', 'equalto', 'packet_loss_simulation') | map(attribute='results.success_rate') | first | default('unknown') }}",
+        "upstream_failover": "{{ chaos_summary.results | selectattr('experiment', 'equalto', 'firewall_rule_disruption') | map(attribute='status') | first | default('unknown') }}"
+      },
+      "resource_resilience": {
+        "memory_pressure_handling": "{{ chaos_summary.results | selectattr('experiment', 'equalto', 'resource_exhaustion') | map(attribute='status') | first | default('unknown') }}",
+        "performance_degradation": "{{ chaos_summary.results | selectattr('experiment', 'equalto', 'resource_exhaustion') | map(attribute='results.dns_under_pressure') | length | default(0) }}"
+      }
+    },
+    "recovery_validation": {
+      "service_status": "{{ chaos_summary.post_validation.service_running }}",
+      "dns_functionality": {{ chaos_summary.post_validation.dns_functional | default(false) | lower }},
+      "cleanup_status": {{ chaos_summary.post_validation.cleanup_status | default([]) | to_json }},
+      "recovery_actions_taken": {{ chaos_summary.recovery_actions | default([]) | to_json }}
+    },
+    "recommendations": [
+{% set recommendations = [] %}
+{% for result in chaos_summary.results %}
+  {% if result.status == 'FAILED' %}
+    {% if result.experiment == 'dns_service_disruption' %}
+      {% set _ = recommendations.append('Implement DNS service monitoring and automatic restart mechanisms') %}
+      {% set _ = recommendations.append('Configure DNS failover to backup resolvers') %}
+    {% endif %}
+    {% if result.experiment == 'network_latency_injection' %}
+      {% set _ = recommendations.append('Optimize DNS query timeout settings') %}
+      {% set _ = recommendations.append('Implement query result caching to reduce latency impact') %}
+    {% endif %}
+    {% if result.experiment == 'packet_loss_simulation' %}
+      {% set _ = recommendations.append('Configure DNS query retries and fallback mechanisms') %}
+    {% endif %}
+    {% if result.experiment == 'resource_exhaustion' %}
+      {% set _ = recommendations.append('Implement resource monitoring and alerting') %}
+      {% set _ = recommendations.append('Configure memory limits and garbage collection') %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
+{% if chaos_summary.post_validation.service_running != 'running' %}
+  {% set _ = recommendations.append('Investigate service recovery mechanisms') %}
+{% endif %}
+{% if not chaos_summary.post_validation.dns_functional %}
+  {% set _ = recommendations.append('Validate DNS configuration and upstream connectivity') %}
+{% endif %}
+{% for rec in recommendations | unique %}
+      "{{ rec }}"{% if not loop.last %},{% endif %}
+{% endfor %}
+    ],
+    "chaos_engineering_insights": {
+      "most_resilient_aspect": "{{
+        'DNS service recovery' if chaos_summary.results | selectattr('experiment', 'equalto', 'dns_service_disruption') | selectattr('status', 'equalto', 'SUCCESS') | list | length > 0
+        else 'Network latency handling' if chaos_summary.results | selectattr('experiment', 'equalto', 'network_latency_injection') | selectattr('status', 'equalto', 'SUCCESS') | list | length > 0
+        else 'Packet loss tolerance' if chaos_summary.results | selectattr('experiment', 'equalto', 'packet_loss_simulation') | selectattr('status', 'equalto', 'SUCCESS') | list | length > 0
+        else 'Resource management' if chaos_summary.results | selectattr('experiment', 'equalto', 'resource_exhaustion') | selectattr('status', 'equalto', 'SUCCESS') | list | length > 0
+        else 'Unknown'
+      }}",
+      "weakest_aspect": "{{
+        'DNS service recovery' if chaos_summary.results | selectattr('experiment', 'equalto', 'dns_service_disruption') | selectattr('status', 'equalto', 'FAILED') | list | length > 0
+        else 'Network latency handling' if chaos_summary.results | selectattr('experiment', 'equalto', 'network_latency_injection') | selectattr('status', 'equalto', 'FAILED') | list | length > 0
+        else 'Packet loss tolerance' if chaos_summary.results | selectattr('experiment', 'equalto', 'packet_loss_simulation') | selectattr('status', 'equalto', 'FAILED') | list | length > 0
+        else 'Resource management' if chaos_summary.results | selectattr('experiment', 'equalto', 'resource_exhaustion') | selectattr('status', 'equalto', 'FAILED') | list | length > 0
+        else 'All systems resilient'
+      }}",
+      "overall_resilience_score": "{{ ((chaos_summary.successful_experiments / chaos_summary.total_experiments) * 100) | round(0) | int if chaos_summary.total_experiments > 0 else 0 }}",
+      "critical_failure_count": {{ chaos_summary.results | selectattr('status', 'equalto', 'FAILED') | list | length }},
+      "recovery_success_rate": "{{ ((chaos_summary.results | selectattr('results.service_recovered', 'equalto', true) | list | length / chaos_summary.total_experiments) * 100) | round(2) if chaos_summary.total_experiments > 0 else 0 }}%"
+    },
+    "next_steps": [
+      "Review failed experiments and implement fixes",
+      "Schedule regular chaos engineering sessions",
+      "Monitor system behavior during normal operations",
+      "Update incident response procedures based on findings",
+      "Implement automated recovery mechanisms where needed"
+    ],
+    "metadata": {
+      "gutter_bonez_version": "{{ gutter_bonez_version | default('dev') }}",
+      "ansible_version": "{{ ansible_version.full }}",
+      "chaos_framework_version": "1.0",
+      "report_generated_by": "gutter_bonez chaos engineering framework",
+      "report_format_version": "1.0",
+      "environment_type": "{{ test_environment | default('unknown') }}",
+      "ctrld_version": "{{ ctrld_version_check.stdout | default('unknown') }}",
+      "platform_capabilities": {
+        "network_simulation": {{ chaos_capabilities.network_simulation | default(false) | lower }},
+        "service_disruption": {{ chaos_capabilities.service_disruption | default(false) | lower }},
+        "dns_poisoning": {{ chaos_capabilities.dns_poisoning | default(false) | lower }},
+        "bandwidth_limiting": {{ chaos_capabilities.bandwidth_limiting | default(false) | lower }},
+        "packet_loss": {{ chaos_capabilities.packet_loss | default(false) | lower }},
+        "firewall_rules": {{ chaos_capabilities.firewall_rules | default(false) | lower }},
+        "process_killing": {{ chaos_capabilities.process_killing | default(false) | lower }}
+      }
+    }
+  }
+}

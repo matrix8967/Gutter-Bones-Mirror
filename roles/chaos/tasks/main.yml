@@ -1,0 +1,414 @@
+---
+# Chaos Engineering Framework for Network and Service Resilience Testing
+# Designed for testing ctrld deployments across diverse network conditions
+
+- name: Initialize chaos engineering session
+  set_fact:
+    chaos_session_id: "{{ ansible_date_time.iso8601_basic_short }}-chaos-{{ ansible_hostname }}"
+    chaos_start_time: "{{ ansible_date_time.epoch }}"
+    chaos_results: []
+    chaos_recovery_actions: []
+
+- name: Create chaos engineering results directory
+  file:
+    path: "{{ chaos_results_dir | default('/tmp/gutter_bonez_chaos') }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Detect chaos testing capabilities
+  set_fact:
+    chaos_capabilities:
+      network_simulation: "{{ ansible_system == 'Linux' }}"
+      service_disruption: true
+      dns_poisoning: "{{ ansible_system != 'Windows' }}"
+      bandwidth_limiting: "{{ ansible_system == 'Linux' }}"
+      packet_loss: "{{ ansible_system == 'Linux' }}"
+      firewall_rules: true
+      process_killing: true
+
+- name: Pre-chaos baseline measurements
+  block:
+    - name: Baseline DNS resolution times
+      shell: |
+        for i in {1..5}; do
+          time dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} google.com +short
+        done
+      register: baseline_dns_times
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Baseline network connectivity
+      shell: "ping -c 5 -W 2 {{ item }}"
+      register: baseline_connectivity
+      changed_when: false
+      failed_when: false
+      loop:
+        - "8.8.8.8"
+        - "1.1.1.1"
+        - "freedns.controld.com"
+      when: ansible_system != 'Windows'
+
+    - name: Baseline service status
+      service_facts:
+      when: ansible_system == 'Linux'
+
+    - name: Record baseline measurements
+      set_fact:
+        chaos_baseline:
+          dns_response_times: "{{ baseline_dns_times.stderr_lines | default([]) }}"
+          connectivity_stats: "{{ baseline_connectivity.results | default([]) }}"
+          service_status: "{{ ansible_facts.services | default({}) }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+
+# Chaos Experiment 1: Network Latency Simulation
+- name: "Chaos Experiment: Network Latency Injection"
+  block:
+    - name: Add network latency using tc (Linux)
+      command: "{{ item }}"
+      loop:
+        - "tc qdisc add dev {{ ansible_default_ipv4.interface }} root handle 1: prio"
+        - "tc qdisc add dev {{ ansible_default_ipv4.interface }} parent 1:3 handle 30: netem delay {{ chaos_config.latency_ms | default(100) }}ms {{ chaos_config.jitter_ms | default(10) }}ms"
+        - "tc filter add dev {{ ansible_default_ipv4.interface }} protocol ip parent 1:0 prio 3 u32 match ip dport 53 0xffff flowid 1:3"
+      become: yes
+      register: latency_injection
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - chaos_capabilities.network_simulation
+        - chaos_experiments.network_latency | default(true)
+
+    - name: Test DNS resolution under latency
+      shell: |
+        for i in {1..3}; do
+          time dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} verify.controld.com +short
+        done
+      register: latency_dns_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Record latency experiment results
+      set_fact:
+        chaos_results: "{{ chaos_results + [latency_result] }}"
+      vars:
+        latency_result:
+          experiment: "network_latency_injection"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          status: "{{ 'SUCCESS' if latency_injection.failed is not defined or not latency_injection.failed else 'FAILED' }}"
+          parameters:
+            latency_ms: "{{ chaos_config.latency_ms | default(100) }}"
+            jitter_ms: "{{ chaos_config.jitter_ms | default(10) }}"
+          results:
+            dns_times_with_latency: "{{ latency_dns_test.stderr_lines | default([]) }}"
+            tc_output: "{{ latency_injection.results | default([]) }}"
+
+    - name: Remove network latency rules
+      command: "tc qdisc del dev {{ ansible_default_ipv4.interface }} root"
+      become: yes
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - chaos_capabilities.network_simulation
+      vars:
+        chaos_recovery_actions: "{{ chaos_recovery_actions + ['removed_tc_latency'] }}"
+
+# Chaos Experiment 2: DNS Service Disruption
+- name: "Chaos Experiment: DNS Service Disruption"
+  block:
+    - name: Stop ctrld service
+      service:
+        name: "{{ ctrld_service_name }}"
+        state: stopped
+      become: yes
+      register: service_stop
+      when:
+        - ansible_system == 'Linux'
+        - chaos_experiments.service_disruption | default(true)
+
+    - name: Wait for service disruption to take effect
+      pause:
+        seconds: "{{ chaos_config.disruption_duration | default(30) }}"
+
+    - name: Test DNS resolution during service outage
+      shell: "dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} google.com +time=2 +tries=1"
+      register: outage_dns_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Test fallback DNS behavior
+      shell: "dig @8.8.8.8 google.com +time=2 +tries=1"
+      register: fallback_dns_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Restart ctrld service
+      service:
+        name: "{{ ctrld_service_name }}"
+        state: started
+      become: yes
+      register: service_restart
+      when:
+        - ansible_system == 'Linux'
+        - service_stop is succeeded
+
+    - name: Wait for service recovery
+      pause:
+        seconds: 10
+
+    - name: Verify service recovery
+      shell: "dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} google.com +short"
+      register: recovery_dns_test
+      changed_when: false
+      failed_when: false
+      retries: 3
+      delay: 5
+      when: ansible_system != 'Windows'
+
+    - name: Record service disruption results
+      set_fact:
+        chaos_results: "{{ chaos_results + [disruption_result] }}"
+      vars:
+        disruption_result:
+          experiment: "dns_service_disruption"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          status: "{{ 'SUCCESS' if service_restart is succeeded else 'FAILED' }}"
+          parameters:
+            disruption_duration: "{{ chaos_config.disruption_duration | default(30) }}"
+          results:
+            service_stopped: "{{ service_stop.changed if service_stop is defined else false }}"
+            dns_during_outage: "{{ outage_dns_test.rc | default(-1) }}"
+            fallback_dns_working: "{{ fallback_dns_test.rc == 0 if fallback_dns_test is defined else false }}"
+            service_recovered: "{{ service_restart.changed if service_restart is defined else false }}"
+            recovery_dns_working: "{{ recovery_dns_test.rc == 0 if recovery_dns_test is defined else false }}"
+
+# Chaos Experiment 3: Packet Loss Simulation
+- name: "Chaos Experiment: Packet Loss Simulation"
+  block:
+    - name: Add packet loss using tc (Linux)
+      command: "{{ item }}"
+      loop:
+        - "tc qdisc add dev {{ ansible_default_ipv4.interface }} root handle 1: prio"
+        - "tc qdisc add dev {{ ansible_default_ipv4.interface }} parent 1:3 handle 30: netem loss {{ chaos_config.packet_loss_percent | default(5) }}%"
+        - "tc filter add dev {{ ansible_default_ipv4.interface }} protocol ip parent 1:0 prio 3 u32 match ip dport 53 0xffff flowid 1:3"
+      become: yes
+      register: packet_loss_injection
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - chaos_capabilities.packet_loss
+        - chaos_experiments.packet_loss | default(true)
+
+    - name: Test DNS resolution under packet loss
+      shell: |
+        for i in {1..10}; do
+          dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} test$i.example.com +time=1 +tries=1 || echo "FAIL"
+        done
+      register: packet_loss_dns_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Record packet loss experiment results
+      set_fact:
+        chaos_results: "{{ chaos_results + [packet_loss_result] }}"
+      vars:
+        packet_loss_result:
+          experiment: "packet_loss_simulation"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          status: "{{ 'SUCCESS' if packet_loss_injection.failed is not defined or not packet_loss_injection.failed else 'FAILED' }}"
+          parameters:
+            packet_loss_percent: "{{ chaos_config.packet_loss_percent | default(5) }}"
+          results:
+            dns_queries: "{{ packet_loss_dns_test.stdout_lines | default([]) }}"
+            failed_queries: "{{ (packet_loss_dns_test.stdout_lines | default([]) | select('match', 'FAIL') | list | length) }}"
+            success_rate: "{{ ((10 - (packet_loss_dns_test.stdout_lines | default([]) | select('match', 'FAIL') | list | length)) / 10 * 100) | round(1) if packet_loss_dns_test.stdout_lines is defined else 0 }}%"
+
+    - name: Remove packet loss rules
+      command: "tc qdisc del dev {{ ansible_default_ipv4.interface }} root"
+      become: yes
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - chaos_capabilities.packet_loss
+
+# Chaos Experiment 4: Resource Exhaustion
+- name: "Chaos Experiment: Resource Exhaustion"
+  block:
+    - name: Create memory pressure
+      shell: |
+        stress-ng --vm 1 --vm-bytes {{ chaos_config.memory_pressure_mb | default(100) }}M --timeout {{ chaos_config.stress_duration | default(30) }}s &
+        echo $! > /tmp/stress_pid
+      become: yes
+      register: memory_stress
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - chaos_experiments.resource_exhaustion | default(true)
+
+    - name: Test DNS resolution under memory pressure
+      shell: |
+        for i in {1..5}; do
+          time dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} memory-test-$i.com +short
+        done
+      register: memory_pressure_dns_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Clean up stress processes
+      shell: |
+        if [ -f /tmp/stress_pid ]; then
+          kill $(cat /tmp/stress_pid) 2>/dev/null || true
+          rm -f /tmp/stress_pid
+        fi
+        pkill -f stress-ng || true
+      become: yes
+      failed_when: false
+      when: ansible_system == 'Linux'
+
+    - name: Record resource exhaustion results
+      set_fact:
+        chaos_results: "{{ chaos_results + [resource_result] }}"
+      vars:
+        resource_result:
+          experiment: "resource_exhaustion"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          status: "{{ 'SUCCESS' if memory_stress.rc == 0 if memory_stress is defined else 'SKIPPED' }}"
+          parameters:
+            memory_pressure_mb: "{{ chaos_config.memory_pressure_mb | default(100) }}"
+            duration: "{{ chaos_config.stress_duration | default(30) }}"
+          results:
+            dns_under_pressure: "{{ memory_pressure_dns_test.stderr_lines | default([]) }}"
+
+# Chaos Experiment 5: Firewall Rule Chaos
+- name: "Chaos Experiment: Firewall Rule Disruption"
+  block:
+    - name: Add blocking firewall rule (iptables)
+      iptables:
+        chain: OUTPUT
+        protocol: udp
+        destination_port: "53"
+        destination: "{{ item }}"
+        jump: DROP
+        comment: "chaos-experiment"
+      become: yes
+      register: firewall_block
+      failed_when: false
+      loop:
+        - "8.8.8.8"
+        - "1.1.1.1"
+      when:
+        - ansible_system == 'Linux'
+        - chaos_experiments.firewall_chaos | default(true)
+
+    - name: Test DNS resolution with blocked upstreams
+      shell: "dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} blocked-upstream.com +time=3 +tries=1"
+      register: blocked_dns_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Remove blocking firewall rules
+      iptables:
+        chain: OUTPUT
+        protocol: udp
+        destination_port: "53"
+        destination: "{{ item }}"
+        jump: DROP
+        state: absent
+      become: yes
+      failed_when: false
+      loop:
+        - "8.8.8.8"
+        - "1.1.1.1"
+      when:
+        - ansible_system == 'Linux'
+
+    - name: Record firewall chaos results
+      set_fact:
+        chaos_results: "{{ chaos_results + [firewall_result] }}"
+      vars:
+        firewall_result:
+          experiment: "firewall_rule_disruption"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          status: "{{ 'SUCCESS' if firewall_block is succeeded else 'FAILED' }}"
+          results:
+            blocked_upstream_test: "{{ blocked_dns_test.rc | default(-1) }}"
+            rules_added: "{{ firewall_block.changed if firewall_block is defined else false }}"
+
+# Post-chaos validation
+- name: Post-chaos system validation
+  block:
+    - name: Verify ctrld service is running
+      service_facts:
+      when: ansible_system == 'Linux'
+
+    - name: Test full DNS resolution recovery
+      shell: |
+        for domain in google.com cloudflare.com verify.controld.com; do
+          dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} $domain +short || echo "FAIL: $domain"
+        done
+      register: post_chaos_dns_test
+      changed_when: false
+      failed_when: false
+      when: ansible_system != 'Windows'
+
+    - name: Check for any remaining chaos artifacts
+      shell: |
+        tc qdisc show dev {{ ansible_default_ipv4.interface }} 2>/dev/null || echo "No tc rules"
+        iptables -L OUTPUT -n | grep chaos || echo "No chaos iptables rules"
+        ps aux | grep stress-ng | grep -v grep || echo "No stress processes"
+      register: chaos_cleanup_check
+      changed_when: false
+      failed_when: false
+      when: ansible_system == 'Linux'
+
+- name: Generate chaos engineering report
+  template:
+    src: chaos_report.j2
+    dest: "{{ chaos_results_dir }}/{{ chaos_session_id }}_chaos_report.json"
+    mode: '0644'
+  delegate_to: localhost
+  vars:
+    chaos_summary:
+      session_id: "{{ chaos_session_id }}"
+      hostname: "{{ ansible_hostname }}"
+      start_time: "{{ chaos_start_time }}"
+      end_time: "{{ ansible_date_time.epoch }}"
+      duration: "{{ (ansible_date_time.epoch | int) - (chaos_start_time | int) }}"
+      total_experiments: "{{ chaos_results | length }}"
+      successful_experiments: "{{ chaos_results | selectattr('status', 'equalto', 'SUCCESS') | list | length }}"
+      failed_experiments: "{{ chaos_results | selectattr('status', 'equalto', 'FAILED') | list | length }}"
+      baseline: "{{ chaos_baseline }}"
+      results: "{{ chaos_results }}"
+      recovery_actions: "{{ chaos_recovery_actions }}"
+      post_validation: {
+        service_running: "{{ ansible_facts.services[ctrld_service_name + '.service'].state == 'running' if ansible_system == 'Linux' else 'unknown' }}",
+        dns_functional: "{{ post_chaos_dns_test.stdout_lines | select('match', '^[0-9.]+$') | list | length > 0 if post_chaos_dns_test is defined else false }}",
+        cleanup_status: "{{ chaos_cleanup_check.stdout_lines | default([]) }}"
+      }
+
+- name: Display chaos engineering summary
+  debug:
+    msg: |
+      🔥 Chaos Engineering Session Complete: {{ chaos_session_id }}
+      ⚡ Experiments Summary:
+        • Total Experiments: {{ chaos_results | length }}
+        • Successful: {{ chaos_results | selectattr('status', 'equalto', 'SUCCESS') | list | length }}
+        • Failed: {{ chaos_results | selectattr('status', 'equalto', 'FAILED') | list | length }}
+        • Duration: {{ (ansible_date_time.epoch | int) - (chaos_start_time | int) }}s
+      🔧 System Status: {{ 'RECOVERED' if ansible_facts.services[ctrld_service_name + '.service'].state == 'running' if ansible_system == 'Linux' else 'UNKNOWN' }}
+      📋 Report: {{ chaos_results_dir }}/{{ chaos_session_id }}_chaos_report.json
+
+- name: Ensure system recovery
+  fail:
+    msg: "System did not recover properly from chaos experiments. Manual intervention may be required."
+  when:
+    - ansible_system == 'Linux'
+    - ansible_facts.services[ctrld_service_name + '.service'].state != 'running'
+    - fail_on_recovery_failure | default(true) | bool

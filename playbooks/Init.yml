@@ -1,153 +1,650 @@
 ---
-- hosts: [all]
-  roles:
-  - ../roles/init
+- name: Universal System Initialization
+  hosts: all
   become: true
-  vars_files:
-    - ../group_vars/init.yml
+  gather_facts: true
+  vars:
+    # Universal initialization configuration
+    init_config:
+      create_user: true
+      configure_ssh: true
+      setup_firewall: true
+      install_base_packages: true
+      configure_hostname: true
+      setup_dotfiles: true
+      harden_system: true
+      enable_auto_updates: false
+
+    # Platform-aware package definitions
+    base_packages:
+      debian:
+        - curl
+        - wget
+        - git
+        - zsh
+        - tmux
+        - htop
+        - neofetch
+        - unzip
+        - build-essential
+        - software-properties-common
+        - apt-transport-https
+        - ca-certificates
+        - gnupg
+        - lsb-release
+        - ufw
+      rhel:
+        - curl
+        - wget
+        - git
+        - zsh
+        - tmux
+        - htop
+        - neofetch
+        - unzip
+        - "@Development tools"
+        - ca-certificates
+        - gnupg2
+        - firewalld
+      darwin:
+        - git
+        - zsh
+        - tmux
+        - htop
+        - wget
+        - curl
+        - unzip
+      windows:
+        - git
+        - 7zip
+        - curl
+        - wget
+        - openssh
+
+    # Security hardening settings
+    security_config:
+      ssh_port: "{{ ssh_port | default('22') }}"
+      disable_root_login: true
+      disable_password_auth: true
+      fail2ban_enabled: "{{ ansible_os_family == 'Debian' }}"
+      firewall_enabled: true
+      auto_updates: "{{ init_config.enable_auto_updates }}"
+
   vars_prompt:
     - name: "user_name"
-      prompt: Desired username?
+      prompt: "Username to create"
       private: false
+      default: "{{ ansible_env.USER | default('admin') }}"
 
     - name: "hostname"
-      prompt: Desired hostname?
+      prompt: "System hostname"
       private: false
+      default: "{{ inventory_hostname }}"
 
     - name: "ssh_port"
-      prompt: Desired SSH Port?
+      prompt: "SSH port (22 for default)"
       private: false
+      default: "22"
+
+    - name: "setup_dev_environment"
+      prompt: "Setup development environment? (y/n)"
+      private: false
+      default: "n"
+
+  pre_tasks:
+    - name: Validate system compatibility
+      assert:
+        that:
+          - ansible_system in ['Linux', 'Darwin', 'Windows']
+          - ansible_distribution is defined or ansible_system != 'Linux'
+        fail_msg: "Unsupported or undetected operating system"
+
+    - name: Set platform-specific variables
+      set_fact:
+        platform_family: "{{ 'debian' if ansible_os_family == 'Debian'
+          else 'rhel' if ansible_os_family == 'RedHat'
+          else 'darwin' if ansible_system == 'Darwin'
+          else 'windows' if ansible_system == 'Windows'
+          else 'unknown' }}"
+        package_manager: "{{ 'apt' if ansible_os_family == 'Debian'
+          else 'dnf' if ansible_pkg_mgr == 'dnf'
+          else 'yum' if ansible_os_family == 'RedHat'
+          else 'homebrew' if ansible_system == 'Darwin'
+          else 'chocolatey' if ansible_system == 'Windows'
+          else 'unknown' }}"
+
+    - name: Display initialization plan
+      debug:
+        msg: |
+          System Initialization Plan:
+
+          Target System: {{ inventory_hostname }}
+          Platform: {{ ansible_system }} {{ ansible_distribution | default('') }} {{ ansible_distribution_version | default('') }}
+          Architecture: {{ ansible_architecture }}
+          Platform Family: {{ platform_family }}
+          Package Manager: {{ package_manager }}
+
+          Configuration:
+          - User: {{ user_name }}
+          - Hostname: {{ hostname }}
+          - SSH Port: {{ ssh_port }}
+          - Development Environment: {{ 'Yes' if setup_dev_environment == 'y' else 'No' }}
+
+          Tasks to Execute:
+          - Create User: {{ init_config.create_user }}
+          - Configure SSH: {{ init_config.configure_ssh }}
+          - Setup Firewall: {{ init_config.setup_firewall }}
+          - Install Packages: {{ init_config.install_base_packages }}
+          - Configure Hostname: {{ init_config.configure_hostname }}
+          - Setup Dotfiles: {{ init_config.setup_dotfiles }}
+          - Harden System: {{ init_config.harden_system }}
+
+    - name: Backup critical configuration files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ item }}.backup.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        backup: yes
+      loop:
+        - /etc/ssh/sshd_config
+        - /etc/hostname
+        - /etc/hosts
+      failed_when: false
+      when:
+        - ansible_system == 'Linux'
+        - init_config.configure_ssh or init_config.configure_hostname
+
+  # Note: init role removed - tasks are defined inline below
 
   tasks:
-    # User + Group Setup
-    - name: Verify 'sudo' group
-      group:
-        name: sudo
-        state: present
+    # Platform Detection and Setup
+    - name: Include platform-specific variables
+      include_vars: "../group_vars/{{ platform_family }}.yml"
+      failed_when: false
 
-    - name: Allow paswordless sudo to sudoers group.
-      lineinfile:
-        path: /etc/sudoers
-        state: present
-        regexp: "^%sudo"
-        line: "%sudo ALL=(ALL) NOPASSWD: ALL"
-        validate: "/usr/sbin/visudo -cf %s"
+    # Package Management - Linux (Debian/Ubuntu)
+    - block:
+        - name: Update package cache (Debian/Ubuntu)
+          apt:
+            update_cache: yes
+            cache_valid_time: 3600
+          retries: 3
+          delay: 5
 
-    - name: Create User.
-      user:
-        name: "{{ user_name }}"
-        state: present
-        groups: sudo
-        append: true
-        create_home: true
-        shell: /usr/bin/zsh
+        - name: Upgrade system packages (Debian/Ubuntu)
+          apt:
+            upgrade: dist
+            autoremove: yes
+            autoclean: yes
+          register: apt_upgrade
 
-    - name: Print message.
-      ansible.builtin.debug:
-        msg: "Setting hostname to: {{ hostname }}"
+        - name: Install base packages (Debian/Ubuntu)
+          apt:
+            name: "{{ base_packages.debian }}"
+            state: latest
+            update_cache: yes
+          when: init_config.install_base_packages
 
-    - name: Set a hostname
-      hostname:
-        name: "{{ hostname }}"
+        - name: Remove unwanted packages (Debian/Ubuntu)
+          apt:
+            name:
+              - popularity-contest
+              - apport
+              - whoopsie
+            state: absent
+            purge: yes
+          failed_when: false
 
-# Package Install
-    - name: Update Apt.
-      apt: name=aptitude update_cache=yes state=latest force_apt_get=yes
+      when:
+        - platform_family == 'debian'
+        - ansible_system == 'Linux'
+      tags: ["packages", "debian"]
 
-    - name: Apt Update.
-      apt: update_cache=yes
+    # Package Management - Linux (RHEL/Fedora/CentOS)
+    - block:
+        - name: Update package cache (RHEL/Fedora)
+          package:
+            name: "*"
+            state: latest
+          when: init_config.install_base_packages
 
-    - name: Apt Upgrade.
-      apt:
-        upgrade: "yes"
+        - name: Install EPEL repository (RHEL/CentOS)
+          package:
+            name: epel-release
+            state: present
+          when: ansible_distribution in ['RedHat', 'CentOS']
 
-    - name: Install Default Packages.
-      apt: name={{ apt_packages }} state=latest
+        - name: Install base packages (RHEL/Fedora)
+          package:
+            name: "{{ base_packages.rhel }}"
+            state: latest
+          when: init_config.install_base_packages
 
-    - name: Remove ubuntu spyware
-      apt:
-        name: popularity-contest
-        state: absent
+      when:
+        - platform_family == 'rhel'
+        - ansible_system == 'Linux'
+      tags: ["packages", "rhel"]
 
-    - name: Check if a reboot is needed for Debian-based systems
-      stat:
-        path: /var/run/reboot-required
-      register: reboot_required
+    # Package Management - macOS
+    - block:
+        - name: Install Homebrew
+          command: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          args:
+            creates: /opt/homebrew/bin/brew
+          become: no
+          when: init_config.install_base_packages
 
-    - name: Reboot the server if needed
-      reboot:
-        msg: "Reboot initiated by Ansible because of reboot required file."
-        connect_timeout: 5
-        reboot_timeout: 600
-        pre_reboot_delay: 0
-        post_reboot_delay: 30
-        test_command: whoami
-      when: reboot_required.stat.exists
+        - name: Install base packages (macOS)
+          homebrew:
+            name: "{{ base_packages.darwin }}"
+            state: present
+          become: no
+          when: init_config.install_base_packages
 
-    - name: Remove old packages from the cache
-      apt:
-        autoclean: yes
+      when:
+        - platform_family == 'darwin'
+        - ansible_system == 'Darwin'
+      tags: ["packages", "darwin"]
 
-    - name: Remove dependencies that are false longer needed
-      apt:
-        autoremove: yes
-        purge: yes
+    # Package Management - Windows
+    - block:
+        - name: Install Chocolatey
+          chocolatey.chocolatey.win_chocolatey:
+            name: chocolatey
+            state: present
 
-    - name: Copy Dotfiles
-      copy:
-        dest: /home/{{ user_name }}/
-        src: ../roles/common/files/home/
-        owner: "{{ user_name }}"
-        group: "{{ user_name }}"
+        - name: Install base packages (Windows)
+          chocolatey.chocolatey.win_chocolatey:
+            name: "{{ base_packages.windows }}"
+            state: present
+          when: init_config.install_base_packages
 
-    - name: Delete MOTD
-      file:
-        path: /etc/update-motd.d/
-        state: absent
+      when:
+        - platform_family == 'windows'
+        - ansible_system == 'Windows'
+      tags: ["packages", "windows"]
 
-    - name: Create MOTD
-      file:
-        path: /etc/update-motd.d/
-        state: directory
+    # User Management
+    - block:
+        - name: Ensure sudo/wheel group exists
+          group:
+            name: "{{ 'sudo' if platform_family == 'debian' else 'wheel' }}"
+            state: present
+          when: ansible_system == 'Linux'
 
-    - name: Setup new motd
-      copy:
-        dest: /etc/update-motd.d/10-motd
-        src: ../roles/common/files/etc/update-motd.d/10-motd
-        owner: root
-        group: root
-        mode: a+x
+        - name: Configure passwordless sudo
+          lineinfile:
+            path: /etc/sudoers
+            state: present
+            regexp: "{{ '^%sudo' if platform_family == 'debian' else '^%wheel' }}"
+            line: "{{ '%sudo ALL=(ALL) NOPASSWD: ALL' if platform_family == 'debian' else '%wheel ALL=(ALL) NOPASSWD: ALL' }}"
+            validate: "{{ '/usr/sbin/visudo -cf %s' if ansible_system == 'Linux' else omit }}"
+            backup: yes
+          when: ansible_system == 'Linux'
 
-# UFW Setup
-    - ufw:
-        rule: allow
-        port: "{{ ssh_port }}"
+        - name: Create user account
+          user:
+            name: "{{ user_name }}"
+            state: present
+            groups: "{{ 'sudo' if platform_family == 'debian' else 'wheel' if platform_family == 'rhel' else 'admin' }}"
+            append: true
+            create_home: true
+            shell: "{{ '/usr/bin/zsh' if ansible_system == 'Linux' else '/bin/zsh' if ansible_system == 'Darwin' else omit }}"
+            password: "{{ '!' if ansible_system == 'Linux' else omit }}"
+          when: ansible_system in ['Linux', 'Darwin']
 
-    - name: UFW - Deny all except SSH.
-      ufw:
-        state: enabled
-        policy: deny
-        direction: incoming
+        - name: Create user account (Windows)
+          ansible.windows.win_user:
+            name: "{{ user_name }}"
+            groups:
+              - Administrators
+            password: "{{ windows_user_password | default(omit) }}"
+          when: ansible_system == 'Windows'
 
-# SSH Key Exchange & Service Reload
+        - name: Setup SSH key for user
+          authorized_key:
+            user: "{{ user_name }}"
+            state: present
+            key: "{{ copy_pub_key }}"
+            manage_dir: yes
+          when:
+            - copy_pub_key is defined
+            - copy_pub_key | length > 0
+            - ansible_system in ['Linux', 'Darwin']
 
-    - name: SSH Key Exchange
-      authorized_key:
-        user: "{{ user_name }}"
-        state: present
-        key: "{{ copy_pub_key }}"
+      when: init_config.create_user
+      tags: ["users", "sudo"]
 
-    - name: Add hardened SSH config
-      copy:
-        dest: /etc/ssh/sshd_config
-        src: ../roles/common/files/etc/ssh/sshd_config
-        owner: root
-        group: root
-        mode: 0600
-      notify: Reload SSH
+    # Hostname Configuration
+    - block:
+        - name: Set system hostname
+          hostname:
+            name: "{{ hostname }}"
+          notify: update hosts file
+
+        - name: Update /etc/hosts with hostname
+          lineinfile:
+            path: /etc/hosts
+            regexp: '^127\.0\.1\.1'
+            line: "127.0.1.1 {{ hostname }}"
+            backup: yes
+          when: ansible_system == 'Linux'
+
+      when:
+        - init_config.configure_hostname
+        - ansible_system in ['Linux', 'Darwin']
+      tags: ["hostname"]
+
+    # SSH Configuration
+    - block:
+        - name: Generate SSH host keys if missing
+          command: ssh-keygen -A
+          args:
+            creates: /etc/ssh/ssh_host_rsa_key
+          when: ansible_system == 'Linux'
+
+        - name: Configure SSH daemon
+          template:
+            src: ../roles/common/templates/sshd_config.j2
+            dest: /etc/ssh/sshd_config
+            owner: root
+            group: root
+            mode: "0600"
+            backup: yes
+            validate: "{{ 'sshd -T -f %s' if ansible_system == 'Linux' else omit }}"
+          notify: restart ssh
+          when: ansible_system in ['Linux', 'Darwin']
+
+        - name: Install and configure OpenSSH (Windows)
+          ansible.windows.win_optional_feature:
+            name: OpenSSH.Server~~~~0.0.1.0
+            state: present
+          when: ansible_system == 'Windows'
+
+      when: init_config.configure_ssh
+      tags: ["ssh", "security"]
+
+    # Firewall Configuration
+    - block:
+        # UFW for Debian/Ubuntu
+        - name: Configure UFW firewall (Debian/Ubuntu)
+          block:
+            - name: Set UFW defaults
+              ufw:
+                direction: "{{ item.direction }}"
+                policy: "{{ item.policy }}"
+              loop:
+                - { direction: "incoming", policy: "deny" }
+                - { direction: "outgoing", policy: "allow" }
+
+            - name: Allow SSH through UFW
+              ufw:
+                rule: allow
+                port: "{{ ssh_port }}"
+                proto: tcp
+                comment: "SSH access"
+
+            - name: Enable UFW
+              ufw:
+                state: enabled
+                logging: "on"
+
+          when: platform_family == 'debian'
+
+        # Firewalld for RHEL/Fedora
+        - name: Configure firewalld (RHEL/Fedora)
+          block:
+            - name: Start and enable firewalld
+              service:
+                name: firewalld
+                state: started
+                enabled: yes
+
+            - name: Allow SSH through firewalld
+              firewalld:
+                port: "{{ ssh_port }}/tcp"
+                permanent: yes
+                state: enabled
+                immediate: yes
+
+          when: platform_family == 'rhel'
+
+        # Windows Firewall
+        - name: Configure Windows Firewall
+          community.windows.win_firewall_rule:
+            name: OpenSSH-Server-In-TCP
+            localport: 22
+            action: allow
+            direction: in
+            protocol: tcp
+            state: present
+          when: platform_family == 'windows'
+
+      when:
+        - init_config.setup_firewall
+        - security_config.firewall_enabled
+      tags: ["firewall", "security"]
+
+    # Development Environment Setup
+    - block:
+        - name: Install development packages (Linux)
+          package:
+            name:
+              - nodejs
+              - npm
+              - python3
+              - python3-pip
+              - docker.io
+              - docker-compose
+            state: present
+          when: ansible_system == 'Linux'
+
+        - name: Install development packages (macOS)
+          homebrew:
+            name:
+              - node
+              - python
+              - docker
+              - docker-compose
+            state: present
+          become: no
+          when: ansible_system == 'Darwin'
+
+        - name: Install development packages (Windows)
+          chocolatey.chocolatey.win_chocolatey:
+            name:
+              - nodejs
+              - python
+              - docker-desktop
+            state: present
+          when: ansible_system == 'Windows'
+
+      when: setup_dev_environment == 'y'
+      tags: ["development"]
+
+    # Dotfiles Configuration
+    - name: Setup dotfiles
+      block:
+        - name: Copy dotfiles to user home
+          copy:
+            src: ../roles/common/files/home/
+            dest: "{{ '/home/' + user_name + '/' if ansible_system == 'Linux' else '/Users/' + user_name + '/' if ansible_system == 'Darwin' else 'C:/Users/' + user_name + '/' }}"
+            owner: "{{ user_name if ansible_system in ['Linux', 'Darwin'] else omit }}"
+            group: "{{ user_name if ansible_system == 'Linux' else omit }}"
+            mode: preserve
+            backup: yes
+          failed_when: false
+
+        - name: Set ZSH as default shell
+          user:
+            name: "{{ user_name }}"
+            shell: "{{ '/usr/bin/zsh' if ansible_system == 'Linux' else '/bin/zsh' if ansible_system == 'Darwin' else omit }}"
+          when: ansible_system in ['Linux', 'Darwin']
+
+      when:
+        - init_config.setup_dotfiles
+        - init_config.create_user
+      tags: ["dotfiles"]
+
+    # System Hardening
+    - block:
+        - name: Install and configure fail2ban (Linux)
+          block:
+            - name: Install fail2ban
+              package:
+                name: fail2ban
+                state: present
+
+            - name: Configure fail2ban
+              template:
+                src: ../roles/common/templates/jail.local.j2
+                dest: /etc/fail2ban/jail.local
+                backup: yes
+              notify: restart fail2ban
+
+          when:
+            - ansible_system == 'Linux'
+            - security_config.fail2ban_enabled
+
+        - name: Disable unnecessary services (Linux)
+          service:
+            name: "{{ item }}"
+            state: stopped
+            enabled: no
+          loop:
+            - avahi-daemon
+            - bluetooth
+            - cups
+          failed_when: false
+          when: ansible_system == 'Linux'
+
+      when: init_config.harden_system
+      tags: ["hardening", "security"]
+
+    # System Health and Cleanup
+    - name: System maintenance tasks
+      block:
+        - name: Update locate database
+          command: updatedb
+          failed_when: false
+          when: ansible_system == 'Linux'
+
+        - name: Check for reboot requirement
+          stat:
+            path: /var/run/reboot-required
+          register: reboot_required
+          when: ansible_system == 'Linux'
+
+        - name: Clean package cache
+          block:
+            - name: Clean apt cache
+              apt:
+                autoclean: yes
+                autoremove: yes
+              when: platform_family == 'debian'
+
+            - name: Clean dnf cache
+              command: dnf clean all
+              when: platform_family == 'rhel'
+
+          when: ansible_system == 'Linux'
+
+      tags: ["cleanup", "maintenance"]
+
+  post_tasks:
+    - name: Verification and summary
+      block:
+        - name: Verify user creation
+          command: id {{ user_name }}
+          register: user_check
+          changed_when: false
+          when: init_config.create_user
+
+        - name: Check SSH service
+          service:
+            name: "{{ 'ssh' if platform_family == 'debian' else 'sshd' }}"
+          register: ssh_status
+          when:
+            - init_config.configure_ssh
+            - ansible_system == 'Linux'
+
+        - name: Display initialization summary
+          debug:
+            msg: |
+              🎉 System Initialization Complete!
+
+              System Details:
+              - Hostname: {{ ansible_hostname }}
+              - Platform: {{ ansible_system }} {{ ansible_distribution | default('') }} {{ ansible_distribution_version | default('') }}
+              - Architecture: {{ ansible_architecture }}
+              - Kernel: {{ ansible_kernel | default('N/A') }}
+
+              Configuration Summary:
+              - User Created: {{ 'Yes (' + user_name + ')' if init_config.create_user else 'No' }}
+              - SSH Configured: {{ 'Yes (Port ' + ssh_port + ')' if init_config.configure_ssh else 'No' }}
+              - Firewall Enabled: {{ 'Yes' if init_config.setup_firewall else 'No' }}
+              - Base Packages: {{ 'Installed' if init_config.install_base_packages else 'Skipped' }}
+              - Development Tools: {{ 'Installed' if setup_dev_environment == 'y' else 'Not Installed' }}
+              - System Hardening: {{ 'Applied' if init_config.harden_system else 'Skipped' }}
+
+              Next Steps:
+              1. Test SSH: ssh -p {{ ssh_port }} {{ user_name }}@{{ ansible_host }}
+              2. Verify sudo: sudo whoami
+              3. Check services: systemctl status
+              {% if reboot_required is defined and reboot_required.stat.exists %}
+              4. ⚠️  Reboot recommended for kernel updates
+              {% endif %}
+
+              Security Recommendations:
+              - Change default SSH port if using 22
+              - Set up SSH key-only authentication
+              - Configure automatic security updates
+              - Review firewall rules regularly
+              - Monitor system logs for anomalies
+
+      rescue:
+        - name: Display troubleshooting guide
+          debug:
+            msg: |
+              ⚠️  Initialization completed with some issues.
+
+              Troubleshooting Steps:
+              1. Check system logs: journalctl -xe
+              2. Verify network connectivity: ping 8.8.8.8
+              3. Test package manager: {{ package_manager }} --version
+              4. Check user permissions: id {{ user_name }}
+              5. Verify SSH config: sshd -T
+
+              Common Issues:
+              - SSH key not configured: Set copy_pub_key variable
+              - Package installation failed: Check internet connection
+              - User creation issues: Verify username requirements
+              - Firewall blocking access: Review UFW/firewalld rules
 
   handlers:
-    - name: Reload SSH
+    - name: restart ssh
       service:
-        name: sshd
-        state: reloaded
+        name: "{{ 'ssh' if platform_family == 'debian' else 'sshd' }}"
+        state: restarted
+      when: ansible_system == 'Linux'
+
+    - name: restart fail2ban
+      service:
+        name: fail2ban
+        state: restarted
+      when: ansible_system == 'Linux'
+
+    - name: update hosts file
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ hostname }}"
+      when: ansible_system == 'Linux'
+
+  tags:
+    - init
+    - system-setup
+    - security
+    - users
+    - packages
+    - configuration

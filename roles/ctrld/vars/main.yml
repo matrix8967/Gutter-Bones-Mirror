@@ -1,0 +1,88 @@
+---
+# Platform-specific paths following ctrld conventions
+ctrld_paths:
+  linux:
+    binary_path: "/usr/local/bin/ctrld"
+    config_dir: "/etc/controld"
+    config_file: "/etc/controld/ctrld.toml"
+    service_name: "ctrld"
+    service_user: "root"
+    log_dir: "/var/log/controld"
+  windows:
+    binary_path: "C:/Program Files/ControlD/ctrld.exe"
+    config_dir: "C:/ControlD"
+    config_file: "C:/ControlD/ctrld.toml"
+    service_name: "ctrld"
+    service_user: "SYSTEM"
+    log_dir: "C:/ControlD/logs"
+  darwin:
+    binary_path: "/usr/local/bin/ctrld"
+    config_dir: "/etc/controld"
+    config_file: "/etc/controld/ctrld.toml"
+    service_name: "com.controld.ctrld"
+    service_user: "root"
+    log_dir: "/var/log/controld"
+
+# Set platform-specific variables
+ctrld_binary_path: "{{ ctrld_paths[ansible_system | lower].binary_path }}"
+ctrld_config_dir: "{{ ctrld_paths[ansible_system | lower].config_dir }}"
+ctrld_config_file: "{{ ctrld_paths[ansible_system | lower].config_file }}"
+ctrld_service_name: "{{ ctrld_paths[ansible_system | lower].service_name }}"
+ctrld_service_user: "{{ ctrld_paths[ansible_system | lower].service_user }}"
+ctrld_log_dir: "{{ ctrld_paths[ansible_system | lower].log_dir }}"
+
+# Installation method - prefer native packages when available
+ctrld_install_method: "{{ 'script' if ansible_system == 'Linux' and ansible_pkg_mgr in ['apt', 'yum', 'dnf'] else 'script' }}"
+
+# Version and checksums for immutable installations
+ctrld_version: "latest"
+ctrld_download_url: "https://api.controld.com/dl"
+
+# Router-specific paths for your network testing
+router_paths:
+  asuswrt_merlin:
+    binary_path: "/jffs/bin/ctrld"
+    config_dir: "/jffs/configs/controld"
+    config_file: "/jffs/configs/controld/ctrld.toml"
+  freshtomato:
+    binary_path: "/jffs/controld/ctrld"
+    config_dir: "/jffs/controld"
+    config_file: "/jffs/controld/ctrld.toml"
+  openwrt:
+    binary_path: "/usr/bin/ctrld"
+    config_dir: "/etc/controld"
+    config_file: "/etc/controld/ctrld.toml"
+  edgeos:
+    binary_path: "/usr/local/bin/ctrld"
+    config_dir: "/etc/controld"
+    config_file: "/etc/controld/ctrld.toml"
+  mikrotik:
+    binary_path: "/system/controld/ctrld"
+    config_dir: "/system/controld"
+    config_file: "/system/controld/ctrld.toml"
+
+# Default configuration values
+ctrld_defaults:
+  force_install: false
+  enable_service: true
+  start_service: true
+  create_user: true
+  validate_config: true
+  backup_config: true
+
+# Network detection patterns for router identification
+router_detection:
+  hostname_patterns:
+    - "^(RT-|GT-|AX)" # ASUS routers
+    - "^(R[0-9]+)" # Netgear routers
+    - "^WRT" # Linksys WRT series
+  vendor_patterns:
+    - "ASUS"
+    - "Netgear"
+    - "Linksys"
+    - "Ubiquiti"
+    - "MikroTik"
+  board_indicators:
+    - "/proc/cpuinfo" # Generic Linux embedded
+    - "/etc/openwrt_release" # OpenWrt
+    - "/opt/vyatta" # EdgeOS/VyOS

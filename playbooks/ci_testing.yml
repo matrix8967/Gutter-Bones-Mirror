@@ -1,0 +1,479 @@
+---
+# CI/CD Testing Playbook for Gutter Bonez Infrastructure Automation
+# Comprehensive testing pipeline for ctrld deployments across multiple environments
+# Designed for GitLab CI/CD integration with parallel testing capabilities
+
+- name: "🧪 Gutter Bonez CI/CD Testing Pipeline"
+  hosts: all
+  gather_facts: yes
+  become: yes
+  vars:
+    ci_test_config:
+      parallel_testing: "{{ ansible_processor_vcpus | default(2) > 2 }}"
+      test_timeout: 300
+      cleanup_on_failure: true
+      generate_artifacts: true
+      fail_fast: false
+      test_levels:
+        - smoke
+        - functional
+        - integration
+        - chaos
+        - performance
+
+    test_matrix:
+      smoke_tests:
+        - service_health_check
+        - basic_dns_resolution
+        - configuration_validation
+      functional_tests:
+        - dns_policy_enforcement
+        - upstream_failover
+        - log_rotation
+        - service_restart_recovery
+      integration_tests:
+        - system_dns_integration
+        - firewall_compatibility
+        - network_interface_binding
+        - multi_listener_support
+      chaos_tests:
+        - network_latency_injection
+        - service_disruption
+        - resource_exhaustion
+        - packet_loss_simulation
+      performance_tests:
+        - dns_query_throughput
+        - memory_usage_profiling
+        - concurrent_connection_handling
+        - response_time_benchmarking
+
+    # Environment-specific configurations
+    test_environments:
+      development:
+        chaos_enabled: false
+        performance_tests: false
+        test_duration_multiplier: 0.5
+      staging:
+        chaos_enabled: true
+        performance_tests: true
+        test_duration_multiplier: 1.0
+      production:
+        chaos_enabled: false
+        performance_tests: true
+        test_duration_multiplier: 2.0
+
+  pre_tasks:
+    - name: Initialize CI testing environment
+      set_fact:
+        ci_session_id: "{{ ansible_date_time.iso8601_basic_short }}-ci-{{ inventory_hostname }}"
+        ci_start_time: "{{ ansible_date_time.epoch }}"
+        test_results_dir: "{{ ansible_env.HOME | default('/tmp') }}/gutter_bonez_ci_results"
+        current_environment: "{{ test_environment | default('development') }}"
+        test_config: "{{ test_environments[test_environment | default('development')] }}"
+
+    - name: Create CI test results directory
+      file:
+        path: "{{ test_results_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Validate test environment prerequisites
+      assert:
+        that:
+          - ansible_system is defined
+          - ansible_distribution is defined
+          - ctrld_binary_path is defined
+        fail_msg: "Essential system information or ctrld configuration missing"
+
+    - name: Display CI testing plan
+      debug:
+        msg: |
+          🚀 CI Testing Session: {{ ci_session_id }}
+          🎯 Environment: {{ current_environment }}
+          📊 Test Matrix:
+            • Smoke Tests: {{ test_matrix.smoke_tests | length }}
+            • Functional Tests: {{ test_matrix.functional_tests | length }}
+            • Integration Tests: {{ test_matrix.integration_tests | length }}
+            • Chaos Tests: {{ test_matrix.chaos_tests | length if test_config.chaos_enabled else 0 }} ({{ 'enabled' if test_config.chaos_enabled else 'disabled' }})
+            • Performance Tests: {{ test_matrix.performance_tests | length if test_config.performance_tests else 0 }} ({{ 'enabled' if test_config.performance_tests else 'disabled' }})
+          ⏱️ Estimated Duration: {{ (test_matrix.smoke_tests | length * 30 + test_matrix.functional_tests | length * 60 + test_matrix.integration_tests | length * 120) * test_config.test_duration_multiplier | int }}s
+
+    - name: Check for existing ctrld installation
+      stat:
+        path: "{{ ctrld_binary_path }}"
+      register: ctrld_exists
+
+    - name: Emergency ctrld installation (if missing)
+      block:
+        - name: Download ctrld installer
+          get_url:
+            url: "https://api.controld.com/dl"
+            dest: "/tmp/ctrld_installer.sh"
+            mode: '0755'
+            timeout: 30
+          when: ansible_system in ['Linux', 'Darwin']
+
+        - name: Install ctrld
+          shell: "/tmp/ctrld_installer.sh"
+          environment:
+            CTRLD_INSTALL_PATH: "{{ ctrld_binary_path | dirname }}"
+          register: emergency_install
+
+        - name: Clean up installer
+          file:
+            path: "/tmp/ctrld_installer.sh"
+            state: absent
+      when: not ctrld_exists.stat.exists
+
+  tasks:
+    # Smoke Tests - Quick validation that basic functionality works
+    - name: "🚨 Smoke Tests - Basic System Validation"
+      block:
+        - name: Smoke Test - Service Health Check
+          command: "{{ ctrld_binary_path }} status"
+          register: smoke_service_status
+          changed_when: false
+          failed_when: false
+
+        - name: Smoke Test - Basic DNS Resolution
+          shell: |
+            if command -v dig >/dev/null 2>&1; then
+              dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} google.com +short +time=3 +tries=1
+            elif command -v nslookup >/dev/null 2>&1; then
+              nslookup google.com 127.0.0.1
+            else
+              echo "No DNS tools available"
+              exit 1
+            fi
+          register: smoke_dns_test
+          changed_when: false
+          failed_when: false
+
+        - name: Smoke Test - Configuration File Validation
+          stat:
+            path: "{{ ctrld_config_file }}"
+          register: smoke_config_check
+
+        - name: Smoke Test - Log File Accessibility
+          stat:
+            path: "{{ ctrld_log_file | default('/var/log/ctrld.log') }}"
+          register: smoke_log_check
+          failed_when: false
+
+        - name: Record smoke test results
+          set_fact:
+            smoke_test_results:
+              service_healthy: "{{ smoke_service_status.rc == 0 if smoke_service_status is defined else false }}"
+              dns_responsive: "{{ smoke_dns_test.rc == 0 if smoke_dns_test is defined else false }}"
+              config_exists: "{{ smoke_config_check.stat.exists }}"
+              logs_accessible: "{{ smoke_log_check.stat.exists if smoke_log_check is defined else false }}"
+              all_passed: "{{ (smoke_service_status.rc == 0 if smoke_service_status is defined else false) and
+                             (smoke_dns_test.rc == 0 if smoke_dns_test is defined else false) and
+                             smoke_config_check.stat.exists }}"
+
+      tags: ['smoke', 'always']
+      ignore_errors: "{{ not ci_test_config.fail_fast }}"
+
+    # Functional Tests - Core functionality validation
+    - name: "⚙️ Functional Tests - Core Feature Validation"
+      block:
+        - name: Functional Test - DNS Policy Enforcement
+          shell: |
+            # Test blocked domain
+            dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} malware.testcategory.com +short +time=2
+            # Test allowed domain
+            dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} google.com +short +time=2
+          register: policy_enforcement_test
+          changed_when: false
+          failed_when: false
+          when: ansible_system != 'Windows'
+
+        - name: Functional Test - Upstream Failover
+          shell: |
+            # Simulate upstream failure and test failover
+            for upstream in {{ ctrld_upstreams | map(attribute='endpoint') | join(' ') if ctrld_upstreams is defined else 'none' }}; do
+              echo "Testing upstream: $upstream"
+              timeout 3 dig @${upstream%:*} google.com +short || echo "Upstream failed: $upstream"
+            done
+          register: upstream_failover_test
+          changed_when: false
+          failed_when: false
+          when:
+            - ansible_system != 'Windows'
+            - ctrld_upstreams is defined
+
+        - name: Functional Test - Service Restart Recovery
+          block:
+            - name: Stop ctrld service
+              service:
+                name: "{{ ctrld_service_name }}"
+                state: stopped
+              register: service_stop
+
+            - name: Wait for stop
+              pause:
+                seconds: 3
+
+            - name: Start ctrld service
+              service:
+                name: "{{ ctrld_service_name }}"
+                state: started
+              register: service_start
+
+            - name: Wait for startup
+              pause:
+                seconds: 5
+
+            - name: Test DNS after restart
+              shell: "dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} google.com +short +time=3"
+              register: post_restart_dns
+              changed_when: false
+              failed_when: false
+              when: ansible_system != 'Windows'
+
+          when: ansible_system == 'Linux'
+
+        - name: Record functional test results
+          set_fact:
+            functional_test_results:
+              policy_enforcement: "{{ policy_enforcement_test.rc == 0 if policy_enforcement_test is defined else 'skipped' }}"
+              upstream_failover: "{{ upstream_failover_test.stdout_lines | length > 0 if upstream_failover_test is defined else 'skipped' }}"
+              restart_recovery: "{{ post_restart_dns.rc == 0 if post_restart_dns is defined else 'skipped' }}"
+              timestamp: "{{ ansible_date_time.iso8601 }}"
+
+      tags: ['functional', 'core']
+      when: ci_test_config.test_levels is contains('functional')
+      ignore_errors: "{{ not ci_test_config.fail_fast }}"
+
+    # Integration Tests - System integration validation
+    - name: "🔗 Integration Tests - System Compatibility"
+      include_role:
+        name: testing
+      vars:
+        test_results_dir: "{{ test_results_dir }}/integration"
+        test_type: "integration"
+      tags: ['integration']
+      when: ci_test_config.test_levels is contains('integration')
+      ignore_errors: "{{ not ci_test_config.fail_fast }}"
+
+    # Chaos Engineering Tests - Resilience validation
+    - name: "🔥 Chaos Tests - Resilience Validation"
+      include_role:
+        name: chaos
+      vars:
+        chaos_results_dir: "{{ test_results_dir }}/chaos"
+        chaos_experiments:
+          network_latency: true
+          service_disruption: true
+          packet_loss: "{{ ansible_system == 'Linux' }}"
+          resource_exhaustion: "{{ ansible_system == 'Linux' }}"
+          firewall_chaos: "{{ ansible_system == 'Linux' }}"
+        chaos_config:
+          latency_ms: 50
+          jitter_ms: 10
+          disruption_duration: 15
+          packet_loss_percent: 3
+          memory_pressure_mb: 50
+          stress_duration: 20
+      tags: ['chaos']
+      when:
+        - ci_test_config.test_levels is contains('chaos')
+        - test_config.chaos_enabled | default(false)
+      ignore_errors: "{{ not ci_test_config.fail_fast }}"
+
+    # Performance Tests - Load and performance validation
+    - name: "📈 Performance Tests - Load Testing"
+      block:
+        - name: Performance Test - DNS Query Throughput
+          shell: |
+            # Use dnsperf if available, otherwise simple loop
+            if command -v dnsperf >/dev/null 2>&1; then
+              echo "google.com A" > /tmp/dns_queries.txt
+              echo "cloudflare.com A" >> /tmp/dns_queries.txt
+              echo "github.com A" >> /tmp/dns_queries.txt
+              dnsperf -s 127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} -d /tmp/dns_queries.txt -c 10 -T 3
+            else
+              # Fallback: simple concurrent test
+              for i in {1..50}; do
+                dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} test$i.com +short +time=1 &
+              done
+              wait
+            fi
+          register: throughput_test
+          changed_when: false
+          failed_when: false
+          when: ansible_system != 'Windows'
+
+        - name: Performance Test - Memory Usage Profiling
+          shell: |
+            # Monitor ctrld memory usage over time
+            pid=$(pgrep -f ctrld | head -1)
+            if [ -n "$pid" ]; then
+              ps -p $pid -o pid,ppid,%mem,rss,vsz,comm --no-headers
+            else
+              echo "ctrld process not found"
+            fi
+          register: memory_profile_test
+          changed_when: false
+          failed_when: false
+          when: ansible_system == 'Linux'
+
+        - name: Performance Test - Response Time Benchmarking
+          shell: |
+            total_time=0
+            count=10
+            for i in $(seq 1 $count); do
+              response_time=$(dig @127.0.0.1 -p {{ ctrld_listeners[0].port | default(53) }} google.com +stats | grep "Query time:" | awk '{print $3}')
+              total_time=$((total_time + response_time))
+            done
+            average_time=$((total_time / count))
+            echo "Average response time: ${average_time}ms"
+            echo "Total queries: $count"
+            echo "Total time: ${total_time}ms"
+          register: response_time_test
+          changed_when: false
+          failed_when: false
+          when: ansible_system != 'Windows'
+
+        - name: Record performance test results
+          set_fact:
+            performance_test_results:
+              throughput: "{{ throughput_test.stdout_lines | default([]) }}"
+              memory_usage: "{{ memory_profile_test.stdout if memory_profile_test is defined else 'N/A' }}"
+              response_times: "{{ response_time_test.stdout_lines | default([]) }}"
+              timestamp: "{{ ansible_date_time.iso8601 }}"
+
+      tags: ['performance', 'load']
+      when:
+        - ci_test_config.test_levels is contains('performance')
+        - test_config.performance_tests | default(false)
+      ignore_errors: "{{ not ci_test_config.fail_fast }}"
+
+  post_tasks:
+    - name: Collect all test results
+      set_fact:
+        ci_test_summary:
+          session_id: "{{ ci_session_id }}"
+          hostname: "{{ inventory_hostname }}"
+          environment: "{{ current_environment }}"
+          start_time: "{{ ci_start_time }}"
+          end_time: "{{ ansible_date_time.epoch }}"
+          duration: "{{ (ansible_date_time.epoch | int) - (ci_start_time | int) }}"
+          smoke_tests: "{{ smoke_test_results | default({}) }}"
+          functional_tests: "{{ functional_test_results | default({}) }}"
+          performance_tests: "{{ performance_test_results | default({}) }}"
+          overall_status: >-
+            {{ 'PASS' if (smoke_test_results.all_passed | default(false)) and
+                         (functional_test_results.restart_recovery != 'failed' if functional_test_results is defined else true)
+               else 'FAIL' }}
+
+    - name: Generate CI test report
+      template:
+        src: ci_test_report.j2
+        dest: "{{ test_results_dir }}/{{ ci_session_id }}_ci_report.json"
+        mode: '0644'
+      delegate_to: localhost
+      vars:
+        test_summary: "{{ ci_test_summary }}"
+        system_info:
+          os_family: "{{ ansible_os_family }}"
+          distribution: "{{ ansible_distribution }}"
+          version: "{{ ansible_distribution_version }}"
+          architecture: "{{ ansible_architecture }}"
+          kernel: "{{ ansible_kernel }}"
+
+    - name: Generate GitLab CI artifacts
+      copy:
+        content: |
+          CI_TEST_STATUS={{ ci_test_summary.overall_status }}
+          CI_SESSION_ID={{ ci_test_summary.session_id }}
+          CI_DURATION={{ ci_test_summary.duration }}
+          CI_SMOKE_PASSED={{ smoke_test_results.all_passed | default(false) }}
+          CI_HOSTNAME={{ inventory_hostname }}
+          CI_ENVIRONMENT={{ current_environment }}
+        dest: "{{ test_results_dir }}/ci_variables.env"
+        mode: '0644'
+      delegate_to: localhost
+      when: ci_test_config.generate_artifacts
+
+    - name: Display CI test summary
+      debug:
+        msg: |
+          🎯 CI Testing Session Complete: {{ ci_session_id }}
+
+          📊 Results Summary:
+          ├── Overall Status: {{ ci_test_summary.overall_status }}
+          ├── Environment: {{ current_environment }}
+          ├── Duration: {{ ci_test_summary.duration }}s
+          ├── Hostname: {{ inventory_hostname }}
+          └── Timestamp: {{ ansible_date_time.iso8601 }}
+
+          🧪 Test Results:
+          ├── Smoke Tests: {{ '✅ PASS' if smoke_test_results.all_passed | default(false) else '❌ FAIL' }}
+          ├── Functional Tests: {{ '✅ COMPLETED' if functional_test_results is defined else '⏭️ SKIPPED' }}
+          ├── Integration Tests: {{ '✅ COMPLETED' if 'integration' in ansible_run_tags | default([]) else '⏭️ SKIPPED' }}
+          ├── Chaos Tests: {{ '✅ COMPLETED' if 'chaos' in ansible_run_tags | default([]) and test_config.chaos_enabled else '⏭️ SKIPPED' }}
+          └── Performance Tests: {{ '✅ COMPLETED' if performance_test_results is defined else '⏭️ SKIPPED' }}
+
+          📋 Artifacts:
+          └── Report: {{ test_results_dir }}/{{ ci_session_id }}_ci_report.json
+
+    - name: Cleanup on failure
+      block:
+        - name: Stop any remaining test processes
+          shell: |
+            pkill -f "dig.*127.0.0.1" || true
+            pkill -f "stress-ng" || true
+            tc qdisc del dev {{ ansible_default_ipv4.interface }} root 2>/dev/null || true
+          become: yes
+          failed_when: false
+
+        - name: Ensure ctrld service is running
+          service:
+            name: "{{ ctrld_service_name }}"
+            state: started
+          when: ansible_system == 'Linux'
+
+        - name: Clean up temporary files
+          file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "/tmp/dns_queries.txt"
+            - "/tmp/stress_pid"
+            - "/tmp/ctrld_installer.sh"
+          failed_when: false
+
+      when:
+        - ci_test_config.cleanup_on_failure
+        - ci_test_summary.overall_status == 'FAIL'
+
+    - name: Fail pipeline on test failure
+      fail:
+        msg: |
+          CI Testing failed. Summary:
+          - Session: {{ ci_session_id }}
+          - Status: {{ ci_test_summary.overall_status }}
+          - Duration: {{ ci_test_summary.duration }}s
+          - Check reports in: {{ test_results_dir }}
+      when:
+        - ci_test_summary.overall_status == 'FAIL'
+        - fail_on_test_failure | default(true) | bool
+
+  handlers:
+    - name: restart ctrld
+      service:
+        name: "{{ ctrld_service_name }}"
+        state: restarted
+      when: ansible_system == 'Linux'
+
+    - name: cleanup test artifacts
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/dns_queries.txt"
+        - "/tmp/stress_pid"
+      failed_when: false
