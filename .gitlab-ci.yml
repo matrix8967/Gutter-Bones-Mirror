@@ -333,9 +333,9 @@ load-test-concurrent:
   script:
     - echo "🚀 Running concurrent load tests..."
     - ansible-playbook -i ${TEST_INVENTORY} -m shell -a "
-        for i in {1..100}; do
-          dig @127.0.0.1 test$i.com +short +time=1 &
-        done; wait" all --limit ubuntu
+      for i in {1..100}; do
+      dig @127.0.0.1 test$i.com +short +time=1 &
+      done; wait" all --limit ubuntu
     - echo "💪 Load test completed"
   artifacts:
     name: "load-test-${CI_COMMIT_SHA:0:8}"
@@ -411,11 +411,11 @@ cleanup-test-environment:
   script:
     - echo "🧹 Cleaning up test environments..."
     - ansible-playbook -i ${TEST_INVENTORY} -m shell -a "
-        pkill -f 'dig.*127.0.0.1' || true;
-        pkill -f 'stress-ng' || true;
-        tc qdisc del dev \$(ip route | grep default | awk '{print \$5}' | head -1) root 2>/dev/null || true;
-        rm -rf /tmp/gutter_bonez_* || true;
-        systemctl status ctrld || true
+      pkill -f 'dig.*127.0.0.1' || true;
+      pkill -f 'stress-ng' || true;
+      tc qdisc del dev \$(ip route | grep default | awk '{print \$5}' | head -1) root 2>/dev/null || true;
+      rm -rf /tmp/gutter_bonez_* || true;
+      systemctl status ctrld || true
       " all --become
     - echo "✨ Cleanup completed"
   rules:
@@ -454,7 +454,8 @@ generate-test-report:
   script:
     - echo "📊 Generating comprehensive test report..."
     - pip install jinja2 pyyaml
-    - python3 << 'EOF'
+    - |
+      python3 << 'EOF'
       import json
       import os
       import glob
@@ -485,10 +486,9 @@ generate-test-report:
       print("📄 Pipeline report generated: pipeline_report.json")
       EOF
     - ls -la pipeline_report.json || echo "Report generation failed"
-
-    # Include DNS security test results in pipeline report
     - echo "🛡️ Checking for DNS security test results..."
-    - python3 << 'EOF'
+    - |
+      python3 << 'EOF'
       import json
       import glob
       import os
@@ -554,15 +554,15 @@ update-docs:
     - echo "📚 Updating documentation..."
     - apk add git
     - echo "Current test coverage and capabilities:" > TEST_RESULTS.md
-    - echo "- Smoke Tests: ✅ Implemented" >> TEST_RESULTS.md
-    - echo "- Functional Tests: ✅ Implemented" >> TEST_RESULTS.md
-    - echo "- Integration Tests: ✅ Implemented" >> TEST_RESULTS.md
-    - echo "- Chaos Engineering: ✅ Implemented" >> TEST_RESULTS.md
-    - echo "- Performance Tests: ✅ Implemented" >> TEST_RESULTS.md
-    - echo "- Network Discovery: ✅ Implemented" >> TEST_RESULTS.md
-    - echo "- DNS Security Testing: ✅ Implemented" >> TEST_RESULTS.md
-    - echo "- Control D Integration: ✅ Implemented" >> TEST_RESULTS.md
-    - echo "Last updated: $(date)" >> TEST_RESULTS.md
+    - echo "- Smoke Tests - ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Functional Tests - ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Integration Tests - ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Chaos Engineering - ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Performance Tests - ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Network Discovery - ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- DNS Security Testing - ✅ Implemented" >> TEST_RESULTS.md
+    - echo "- Control D Integration - ✅ Implemented" >> TEST_RESULTS.md
+    - echo "Last updated - $(date)" >> TEST_RESULTS.md
     - git add TEST_RESULTS.md || true
     - git commit -m "Update test documentation [skip ci]" || echo "No documentation changes"
   rules:
