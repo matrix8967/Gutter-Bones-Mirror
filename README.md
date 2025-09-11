@@ -7,6 +7,7 @@ A comprehensive Ansible-based automation framework for infrastructure deployment
 ## 🏰 Darkfort Network Environment
 
 This toolkit is optimized for the **darkfort** network infrastructure:
+
 - **Domain:** `.darkfort`
 - **Primary Gateway:** EdgeRouter 8 Pro (10.10.10.1)
 - **Network Topology:** Segmented VLAN architecture
@@ -19,25 +20,29 @@ This toolkit is optimized for the **darkfort** network infrastructure:
 **Gutter Bonez** provides **immutable, idempotent automation** for:
 
 ### 🖥️ **System Administration**
+
 - **Multi-platform system initialization** (Linux, Windows, macOS)
 - **User account management** with SSH key deployment
 - **Package management** and system hardening
 - **Dotfiles and configuration synchronization**
 - **Security baseline implementation**
 
-### 🌐 **Network Infrastructure** 
+### 🌐 **Network Infrastructure**
+
 - **Router and firewall management** (ASUSWRT-Merlin, OpenWrt, EdgeOS, MikroTik)
 - **DNS service deployment** (Control-D ctrld, Pi-hole, Unbound)
 - **Network device discovery and configuration**
 - **VLAN and network segmentation testing**
 
 ### 🔧 **Development Environment Setup**
+
 - **Containerized development stacks** (Docker, Podman)
 - **Language runtime management** (Python, Node.js, Go)
 - **IDE and toolchain configuration**
 - **Git workflow and hooks setup**
 
 ### 🧪 **Testing & QA Automation**
+
 - **Chaos engineering scenarios** for network resilience testing
 - **Multi-environment validation** (dev, staging, production)
 - **DNS security testing framework** with threat detection and HTTPS interception analysis
@@ -45,6 +50,7 @@ This toolkit is optimized for the **darkfort** network infrastructure:
 - **Performance benchmarking automation** with latency profiling
 
 ### ☁️ **Cloud & Virtualization**
+
 - **KVM/QEMU virtual machine provisioning**
 - **Container orchestration** (Docker Swarm, basic Kubernetes)
 - **Cloud provider integration** preparation
@@ -53,6 +59,7 @@ This toolkit is optimized for the **darkfort** network infrastructure:
 ## 🏗️ Architecture & Design Philosophy
 
 ### **Immutable Infrastructure Principles**
+
 - ✅ **Idempotent operations** - Safe to run multiple times
 - ✅ **Configuration validation** - Syntax and logic checking
 - ✅ **Atomic deployments** - All-or-nothing updates
@@ -62,18 +69,18 @@ This toolkit is optimized for the **darkfort** network infrastructure:
 
 ### **Platform Support Matrix**
 
-| Platform | Support Level | Primary Use Cases | Darkfort Usage |
-|----------|---------------|-------------------|----------------|
-| **Pop!_OS/Ubuntu** | 🟢 Full | Desktop workstations, development | QA workstation, DNS servers |
-| **Fedora/RHEL** | 🟢 Full | Servers, enterprise environments | Development workstation |
-| **Debian** | 🟢 Full | Servers, embedded systems | Production servers, DMZ |
-| **Windows 10/11** | 🟡 Good | Desktop testing, enterprise | Lab testing environment |
-| **Windows Server** | 🟡 Good | Active Directory, enterprise services | Lab domain controller |
-| **macOS** | 🟡 Good | Developer workstations | Not currently deployed |
-| **EdgeOS** | 🟢 Full | Enterprise routing, network labs | **Primary Gateway (EdgeRouter 8 Pro)** |
-| **ASUSWRT-Merlin** | 🟢 Full | Router automation, network testing | Lab router testing (GT-AX6000) |
-| **FreshTomato** | 🟢 Full | Embedded networking, custom firmware | Lab router testing (R7000) |
-| **MikroTik RouterOS** | 🟡 Good | Network testing, WISP deployments | Future lab expansion |
+| Platform              | Support Level | Primary Use Cases                     | Darkfort Usage                         |
+| --------------------- | ------------- | ------------------------------------- | -------------------------------------- |
+| **Pop!\_OS/Ubuntu**   | 🟢 Full       | Desktop workstations, development     | QA workstation, DNS servers            |
+| **Fedora/RHEL**       | 🟢 Full       | Servers, enterprise environments      | Development workstation                |
+| **Debian**            | 🟢 Full       | Servers, embedded systems             | Production servers, DMZ                |
+| **Windows 10/11**     | 🟡 Good       | Desktop testing, enterprise           | Lab testing environment                |
+| **Windows Server**    | 🟡 Good       | Active Directory, enterprise services | Lab domain controller                  |
+| **macOS**             | 🟡 Good       | Developer workstations                | Not currently deployed                 |
+| **EdgeOS**            | 🟢 Full       | Enterprise routing, network labs      | **Primary Gateway (EdgeRouter 8 Pro)** |
+| **ASUSWRT-Merlin**    | 🟢 Full       | Router automation, network testing    | Lab router testing (GT-AX6000)         |
+| **FreshTomato**       | 🟢 Full       | Embedded networking, custom firmware  | Lab router testing (R7000)             |
+| **MikroTik RouterOS** | 🟡 Good       | Network testing, WISP deployments     | Future lab expansion                   |
 
 ## 🚀 Quick Start
 
@@ -100,6 +107,7 @@ ansible all -i inventory/hosts -m ping
 ### **Common Operations**
 
 #### **Initialize New System in Darkfort Network**
+
 ```bash
 # Initialize a new server in production subnet
 ansible-playbook -i inventory/hosts playbooks/Init.yml \
@@ -113,6 +121,7 @@ ansible-playbook -i inventory/hosts playbooks/Init.yml \
 ```
 
 #### **Deploy Control D Infrastructure**
+
 ```bash
 # Deploy primary DNS resolver
 ansible-playbook -i inventory/example_ctrld_deployment.yml \
@@ -131,6 +140,7 @@ ansible-playbook -i inventory/example_ctrld_deployment.yml \
 ```
 
 #### **Configure Development Environment**
+
 ```bash
 # Validate darkfort configuration
 ./scripts/validate_darkfort_config.sh
@@ -142,6 +152,7 @@ ansible-playbook -i inventory/hosts playbooks/Dots.yml \
 ```
 
 #### **Network Discovery and Testing**
+
 ```bash
 # Discover darkfort network topology
 ansible-playbook -i inventory/hosts -m include_role -a name=network_discovery \
@@ -158,6 +169,7 @@ ansible-playbook -i inventory/hosts playbooks/EdgeOS.yml \
 ```
 
 #### **DNS Security Testing & Validation**
+
 ```bash
 # Comprehensive DNS security testing framework
 ansible-playbook -i inventory/example_dns_security.yml \
@@ -180,6 +192,7 @@ ansible-playbook -i inventory/hosts playbooks/site.yml \
 ```
 
 #### **Testing and Quality Assurance**
+
 ```bash
 # Run comprehensive CI testing pipeline
 ansible-playbook -i inventory/hosts playbooks/ci_testing.yml \
@@ -202,7 +215,7 @@ ansible-playbook -i inventory/hosts playbooks/Upgrade.yml \
 gutter_bonez/
 ├── 📂 playbooks/           # Executable automation scripts
 │   ├── 🖥️  Init.yml                    # System initialization
-│   ├── 🖥️  Debian.yml                  # Debian-specific setup  
+│   ├── 🖥️  Debian.yml                  # Debian-specific setup
 │   ├── 🖥️  RHEL.yml                    # Red Hat family setup
 │   ├── 🖥️  Darwin.yml                  # macOS configuration
 │   ├── 🖥️  Windows.yml                 # Windows system setup
@@ -218,7 +231,7 @@ gutter_bonez/
 ├── 📂 roles/               # Reusable automation components
 │   ├── 🎯 common/                      # Shared configurations
 │   ├── 🐧 debian/                      # Debian-specific tasks
-│   ├── 🎩 rhel/                        # RHEL-family tasks  
+│   ├── 🎩 rhel/                        # RHEL-family tasks
 │   ├── 🔧 init/                        # System initialization
 │   ├── 🌐 ctrld/                       # DNS service management
 │   └── 📜 scrolls/                     # Dotfiles & configs (submodule)
@@ -236,26 +249,31 @@ gutter_bonez/
 ## 🎛️ Core Components
 
 ### **System Initialization (`Init.yml`)**
+
 Comprehensive system setup including:
+
 - User account creation with SSH key deployment
-- Package installation and system updates  
+- Package installation and system updates
 - Security hardening (UFW firewall, SSH configuration)
 - Hostname and network configuration
 - MOTD and system branding
 
 ### **Platform-Specific Setup**
+
 - **`Debian.yml`** - APT package management, systemd services
-- **`RHEL.yml`** - DNF/YUM packages, SELinux configuration  
+- **`RHEL.yml`** - DNF/YUM packages, SELinux configuration
 - **`Darwin.yml`** - Homebrew packages, launchd services
 - **`Windows.yml`** - Chocolatey packages, Windows services
 
 ### **Network Infrastructure**
+
 - **`Asus_Merlin.yml`** - ASUSWRT-Merlin router configuration
 - **`EdgeOS.yml`** - Ubiquiti EdgeRouter management
 - **`MikroTik.yml`** - RouterOS configuration and monitoring
 - **DNS Services** - Control-D ctrld deployment with platform awareness
 
-### **Configuration Management** 
+### **Configuration Management**
+
 - **`Dots.yml`** - Dotfiles synchronization from `scrolls` submodule
 - **`Firewall.yml`** - UFW, iptables, and Windows Firewall rules
 - **Shared configs** via Git submodule for consistency
@@ -263,13 +281,14 @@ Comprehensive system setup including:
 ## 🔧 Configuration Examples
 
 ### **Basic Host Inventory**
+
 ```yaml
 # inventory/hosts
 [workstations]
 pop-os-desktop ansible_host=192.168.1.100 ansible_user=azazel
-fedora-laptop  ansible_host=192.168.1.101 ansible_user=azazel  
+fedora-laptop  ansible_host=192.168.1.101 ansible_user=azazel
 
-[servers]  
+[servers]
 ubuntu-server  ansible_host=192.168.1.102 ansible_user=azazel
 debian-docker  ansible_host=192.168.1.103 ansible_user=docker
 
@@ -279,6 +298,7 @@ edgerouter    ansible_host=192.168.1.1   ansible_user=ubnt
 ```
 
 ### **DNS Service Configuration**
+
 ```yaml
 # group_vars/ctrld.yml (encrypted with ansible-vault)
 ctrld_listeners:
@@ -291,7 +311,7 @@ ctrld_listeners:
       - "verify.controld.com": ["upstream.0"]
 
 ctrld_upstreams:
-  "0": 
+  "0":
     name: "Control D - Security"
     type: "doh"
     endpoint: "https://freedns.controld.com/p1"
@@ -299,6 +319,7 @@ ctrld_upstreams:
 ```
 
 ### **Development Environment Variables**
+
 ```yaml
 # group_vars/workstations.yml
 dev_packages:
@@ -319,15 +340,16 @@ configure_shell: true
 
 ### **Router Support Matrix**
 
-| Router/Firmware | Management Method | Config Persistence | Status |
-|-----------------|-------------------|-------------------|---------|
-| **ASUSWRT-Merlin** | SSH + nvram commands | `/jffs/` partition | ✅ Production Ready |
-| **OpenWrt/LEDE** | SSH + UCI commands | `/etc/config/` | ✅ Production Ready |  
-| **EdgeOS/VyOS** | SSH + configure commands | `/config/` | ✅ Production Ready |
-| **MikroTik RouterOS** | SSH + RouterOS commands | System storage | 🟡 Testing |
-| **FreshTomato** | SSH + nvram commands | `/jffs/` partition | 🟡 Testing |
+| Router/Firmware       | Management Method        | Config Persistence | Status              |
+| --------------------- | ------------------------ | ------------------ | ------------------- |
+| **ASUSWRT-Merlin**    | SSH + nvram commands     | `/jffs/` partition | ✅ Production Ready |
+| **OpenWrt/LEDE**      | SSH + UCI commands       | `/etc/config/`     | ✅ Production Ready |
+| **EdgeOS/VyOS**       | SSH + configure commands | `/config/`         | ✅ Production Ready |
+| **MikroTik RouterOS** | SSH + RouterOS commands  | System storage     | 🟡 Testing          |
+| **FreshTomato**       | SSH + nvram commands     | `/jffs/` partition | 🟡 Testing          |
 
 ### **Router Deployment Example**
+
 ```bash
 # Deploy to all ASUSWRT-Merlin routers
 ansible-playbook -i inventory/Network.yml \
@@ -345,19 +367,21 @@ ansible-playbook -i inventory/Network.yml \
 ## 🧪 Testing & Quality Assurance
 
 ### **Multi-Environment Testing**
+
 ```bash
 # Development environment validation
 ansible-playbook playbooks/install_ctrld.yml \
   --limit development \
   --extra-vars "ctrld_dev_mode=true"
 
-# Production readiness check  
+# Production readiness check
 ansible-playbook playbooks/install_ctrld.yml \
   --limit staging \
   --check --diff
 ```
 
 ### **Chaos Engineering**
+
 ```bash
 # Network resilience testing
 ansible-playbook playbooks/install_ctrld.yml \
@@ -370,7 +394,8 @@ ansible all -i inventory/chaos.yml -m shell \
 ```
 
 ### **Performance Benchmarking**
-```bash  
+
+```bash
 # DNS resolution performance testing
 ansible routers -i inventory/Network.yml -m shell \
   -a "time nslookup google.com 127.0.0.1"
@@ -383,6 +408,7 @@ ansible servers -m shell \
 ## 🔐 Security & Secrets Management
 
 ### **Ansible Vault Integration**
+
 ```bash
 # Edit encrypted configurations
 ansible-vault edit group_vars/ctrld.yml
@@ -395,7 +421,8 @@ ansible-vault view group_vars/ctrld.yml
 ansible-playbook --ask-vault-pass playbooks/install_ctrld.yml
 ```
 
-### **SSH Key Management** 
+### **SSH Key Management**
+
 ```bash
 # Deploy SSH keys to new systems
 ansible-playbook playbooks/Init.yml \
@@ -409,11 +436,12 @@ ansible all -m authorized_key \
 ## 📊 Monitoring & Observability
 
 ### **Health Checks**
+
 ```bash
 # Verify DNS service health across infrastructure
 ansible all -m shell -a "systemctl is-active ctrld"
 
-# Check system resources  
+# Check system resources
 ansible all -m setup -a "filter=ansible_meminfo_mb"
 
 # Network connectivity validation
@@ -421,6 +449,7 @@ ansible routers -m shell -a "ping -c3 8.8.8.8"
 ```
 
 ### **Log Aggregation**
+
 ```bash
 # Collect service logs from multiple hosts
 ansible servers -m shell \
@@ -434,13 +463,16 @@ ansible all -m shell \
 ## 🔄 Continuous Integration & Deployment
 
 ### **GitLab CI/CD Integration**
+
 The repository includes GitLab CI configuration for:
+
 - Automatic submodule updates (`scrolls` dotfiles)
 - Syntax validation of playbooks and templates
 - Integration testing in isolated environments
 - Automated deployment to staging infrastructure
 
 ### **Pre-commit Hooks**
+
 ```bash
 # Install pre-commit hooks for quality assurance
 pip install pre-commit
@@ -456,7 +488,8 @@ ansible-lint playbooks/*.yml
 ### **Common Issues & Solutions**
 
 **SSH Connection Failures:**
-```bash  
+
+```bash
 # Test connectivity
 ansible all -m ping -vvv
 
@@ -465,15 +498,17 @@ ansible all -m shell -a "ssh -o ConnectTimeout=5 user@host echo test"
 ```
 
 **Permission Issues:**
+
 ```bash
 # Verify sudo access
 ansible all -m shell -a "sudo whoami" --become
 
-# Check file permissions  
+# Check file permissions
 ansible all -m file -a "path=/etc/ctrld mode=0755" --become
 ```
 
 **Service Startup Failures:**
+
 ```bash
 # Check service status
 ansible all -m systemd -a "name=ctrld state=started" --become
@@ -483,6 +518,7 @@ ansible all -m shell -a "journalctl -u ctrld --no-pager -l"
 ```
 
 ### **Debug Mode**
+
 ```bash
 # Enable verbose Ansible output
 ansible-playbook -vvv playbooks/install_ctrld.yml
@@ -497,26 +533,30 @@ ansible-playbook playbooks/install_ctrld.yml \
 This automation framework is actively developed for diverse infrastructure needs. Key contribution areas:
 
 ### **Platform Support**
+
 - Additional router firmware support
-- Cloud provider integrations  
+- Cloud provider integrations
 - Container platform automation
 - Mobile device management
 
 ### **Testing Scenarios**
+
 - Chaos engineering patterns
 - Performance benchmarking suites
 - Security compliance validation
 - Network topology testing
 
 ### **Monitoring Integration**
+
 - Prometheus metrics collection
 - Grafana dashboard templates
-- Alerting rule definitions  
+- Alerting rule definitions
 - Log aggregation patterns
 
 ## 📋 Development Roadmap
 
 ### **Completed ✅**
+
 - [x] Multi-platform system initialization
 - [x] Router firmware automation (ASUSWRT-Merlin, OpenWrt, EdgeOS)
 - [x] DNS service deployment (Control-D ctrld)
@@ -524,7 +564,8 @@ This automation framework is actively developed for diverse infrastructure needs
 - [x] GitLab CI/CD integration
 - [x] Dotfiles synchronization via submodules
 
-### **In Progress 🔄**  
+### **In Progress 🔄**
+
 - [ ] Windows Server automation expansion
 - [ ] Container orchestration patterns
 - [ ] Network security baseline implementation
@@ -532,9 +573,10 @@ This automation framework is actively developed for diverse infrastructure needs
 - [ ] Chaos engineering scenario library
 
 ### **Planned 🎯**
+
 - [ ] Kubernetes cluster deployment
 - [ ] Cloud provider integration (AWS, GCP, Azure)
-- [ ] Infrastructure compliance scanning  
+- [ ] Infrastructure compliance scanning
 - [ ] Automated backup and disaster recovery
 - [ ] Mobile device management (MDM) integration
 - [ ] Network topology discovery and mapping
@@ -542,13 +584,15 @@ This automation framework is actively developed for diverse infrastructure needs
 ## 📚 Documentation
 
 ### **Detailed Guides**
+
 - **[System Initialization](docs/system-init.md)** - Complete setup procedures
-- **[Network Device Management](docs/network-devices.md)** - Router and switch automation  
+- **[Network Device Management](docs/network-devices.md)** - Router and switch automation
 - **[DNS Service Deployment](docs/dns-services.md)** - Control-D and other DNS solutions
 - **[Security Hardening](docs/security.md)** - Baseline security implementation
 - **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions
 
-### **API & Integration**  
+### **API & Integration**
+
 - **[Ansible Best Practices](docs/ansible-patterns.md)** - Coding standards and patterns
 - **[Vault Management](docs/vault-management.md)** - Secrets and encryption
 - **[CI/CD Integration](docs/cicd.md)** - GitLab and automation pipelines
@@ -556,13 +600,14 @@ This automation framework is actively developed for diverse infrastructure needs
 
 ## 🏴‍☠️ Philosophy
 
-> *"Always lots left `todo`, but every deployment should be identical, testable, and recoverable."*
+> _"Always lots left `todo`, but every deployment should be identical, testable, and recoverable."_
 
 **Gutter Bonez** embodies the principle that infrastructure should be **code**, deployments should be **immutable**, and chaos should be **engineered**. Built for environments where you need to rapidly deploy, test, and validate configurations across diverse computing platforms.
 
 ### **Azazel's Infrastructure Commandments:**
+
 1. **Automate everything possible** - Manual is error-prone
-2. **Test in production-like chaos** - Chaos finds bugs before users do  
+2. **Test in production-like chaos** - Chaos finds bugs before users do
 3. **Document failure scenarios** - Learn from every outage
 4. **Make recovery faster than breaking** - MTTR > MTTF
 5. **Prefer tight feedback loops** over perfect code
@@ -573,24 +618,28 @@ This automation framework is actively developed for diverse infrastructure needs
 ## 🎯 Use Cases
 
 ### **QA & Testing Engineers**
+
 - Rapid environment provisioning for testing scenarios
-- DNS resolution validation across diverse platforms  
+- DNS resolution validation across diverse platforms
 - Network device configuration consistency
 - Chaos engineering for resilience testing
 
-### **DevOps & SRE Teams**  
+### **DevOps & SRE Teams**
+
 - Infrastructure as Code implementation
 - Configuration drift detection and remediation
 - Automated security baseline enforcement
 - Multi-environment deployment pipelines
 
 ### **Network Engineers**
+
 - Router and switch configuration management
 - Network topology validation and testing
-- VLAN and segmentation automation  
+- VLAN and segmentation automation
 - Performance monitoring and optimization
 
 ### **Systems Administrators**
+
 - Mass system deployment and configuration
 - Security hardening across platforms
 - Package management and updates
@@ -598,6 +647,6 @@ This automation framework is actively developed for diverse infrastructure needs
 
 ---
 
-*Built with ❤️ for infrastructure engineers who believe that manual deployment is a bug, not a feature.*
+_Built with ❤️ for infrastructure engineers who believe that manual deployment is a bug, not a feature._
 
 **Current Status:** 🚧 **Active Development** - Production ready for core components, expanding platform support and testing scenarios.

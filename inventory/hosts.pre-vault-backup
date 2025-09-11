@@ -1,0 +1,133 @@
+# ----- #
+
+# Gutter Bonez Infrastructure Inventory
+# Azazel's Production Network Environment
+# Domain: .darkfort
+# Primary Gateway: EdgeRouter 8 Pro
+
+[all:vars]
+# Global configuration
+# ansible_user=azazel
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_host_key_checking=False
+# ansible_python_interpreter=/usr/bin/python3
+
+# Domain configuration
+domain_name=darkfort
+fqdn_suffix=.darkfort
+
+# Network topology
+primary_subnet=10.10.10.0/24
+isolated_subnet_1=10.20.20.0/24
+isolated_subnet_2=10.30.30.0/24
+primary_gateway=10.10.10.1
+
+# Control D configuration
+ctrld_service_name=ctrld
+ctrld_binary_path=/usr/local/bin/ctrld
+ctrld_config_dir=/etc/ctrld
+ctrld_config_file=/etc/ctrld/ctrld.toml
+ctrld_log_dir=/var/log/ctrld
+ctrld_log_file=/var/log/ctrld/ctrld.log
+ctrld_service_user=controld
+
+# Testing configuration
+test_environment=production
+test_results_dir=/tmp/gutter_bonez_tests
+discovery_results_dir=/tmp/gutter_bonez_discovery
+chaos_results_dir=/tmp/gutter_bonez_chaos
+
+# ====================
+# PRODUCTION SUBNET (10.10.10.0/24)
+# ====================
+
+[darkfort]
+RPi5 ansible_host=10.10.10.5
+Darlene ansible_host=10.10.10.10
+LittleHorn ansible_host=10.10.10.204
+Netwatch ansible_host=10.10.10.119
+Netwatch-Zero ansible_host=10.10.10.213
+# RWB ansible_host=10.10.10.20
+Mammon ansible_host=10.10.10.120
+# Glitch ansible_host=10.10.10.100
+
+[darkfort:vars]
+ansible_port=8967
+ansible_ssh_user=azazel
+become=true
+become_exe=sudo
+become_user=root
+
+[apple]
+MacMini-Stepchild ansible_host=10.10.10.15
+Macbook-Stepchild ansible_host=10.10.10.114
+
+[apple:vars]
+ansible_port=8967
+ansible_ssh_user=azazel
+become=true
+become_exe=sudo
+become_user=root
+
+[routers]
+Edgerouter ansible_host=10.10.10.1
+ERX ansible_host=10.10.10.55
+ERX-SFP ansible_host=10.10.10.50
+R7000 ansible_host=10.10.10.60
+AsusGTAX6000 ansible_host=10.10.10.85
+AsusRTAX58U ansible_host=10.10.10.80
+MikroTik ansible_host=10.10.10.75
+UAP ansible_host=10.10.10.90
+
+[routers:vars]
+ansible_port=8967
+ansible_ssh_user=azazel
+become=true
+become_exe=sudo
+become_user=root
+
+[vmnet]
+Ubuntu ansible_host=192.168.100.182
+
+[vmnet:vars]
+ansible_port=22
+ansible_ssh_user=alex
+become=true
+become_exe=sudo
+become_user=root
+
+[styx]
+DeadSea ansible_host=DeadSea ansible_ssh_user=leviathan
+# Luciferian_Towers ansible_host=LuciferianTowers
+# DarkFort ansible_host=Dark-Fort
+# Behemoth ansible_host=Behemoth
+Netwatch ansible_host=NetWatch
+# Thiccpad ansible_host=Thiccpad ansible_port=22
+
+[styx:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -W %h:%p -q Styx"'
+ansible_port=8967
+ansible_ssh_user=azazel
+become=true
+become_exe=sudo
+become_user=root
+
+[vultr]
+NewCastle ansible_host=NewCastle
+
+[vultr:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -W %h:%p -q Styx"'
+ansible_port=8967
+ansible_ssh_user=azazel
+become=true
+become_user=root
+
+[linode]
+Styx ansible_host=Styx ansible_ssh_user=charon
+
+[linode:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -W %h:%p -q Styx"'
+ansible_port=8967
+ansible_ssh_user=azazel
+become=true
+become_user=root
