@@ -1,0 +1,62 @@
+========================================
+GUTTER BONEZ SYSTEM REPORT
+========================================
+Hostname: {{ report_data.hostname }}
+IP Address: {{ report_data.ansible_host }}
+Operating System: {{ report_data.os_info }}
+Kernel Version: {{ report_data.kernel }}
+Architecture: {{ report_data.architecture }}
+CPU Cores: {{ report_data.cpu_cores }}
+Total Memory: {{ report_data.memory_total }}
+Uptime: {{ (report_data.uptime_seconds | int / 86400) | round(1) }} days
+
+Report Generated: {{ ansible_date_time.iso8601 }}
+
+========================================
+SYSTEM UPTIME & LOAD
+========================================
+{{ report_data.uptime_info }}
+
+========================================
+MEMORY USAGE
+========================================
+{{ report_data.memory_info }}
+
+========================================
+DISK USAGE
+========================================
+{{ report_data.disk_usage }}
+
+========================================
+DNS CONFIGURATION
+========================================
+{{ report_data.dns_config }}
+
+========================================
+CTRLD STATUS
+========================================
+{{ report_data.ctrld_status }}
+
+========================================
+TOP PROCESSES (BY CPU)
+========================================
+{{ report_data.top_processes }}
+
+========================================
+NETWORK CONNECTIONS
+========================================
+{{ report_data.network_connections }}
+
+========================================
+RUNNING SERVICES
+========================================
+{{ report_data.running_services }}
+
+========================================
+INSTALLED PACKAGES
+========================================
+{{ report_data.packages }}
+
+========================================
+END OF REPORT
+========================================

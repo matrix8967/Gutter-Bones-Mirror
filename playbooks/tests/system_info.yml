@@ -1,0 +1,261 @@
+---
+# ====================
+# GUTTER BONEZ SYSTEM INFORMATION GATHERING
+# ====================
+# Collects comprehensive system information from all Linux hosts
+# Usage: ansible-playbook -i inventory/Inventory01.ini playbooks/tests/system_info.yml
+
+- name: "Gather System Information from Linux Hosts"
+  hosts: linux
+  gather_facts: yes
+  vars:
+    output_dir: "/tmp/gutter_bonez_reports"
+    report_timestamp: "{{ ansible_date_time.epoch }}"
+
+  tasks:
+    - name: "Create local output directory"
+      file:
+        path: "{{ output_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: yes
+
+    - name: "Get detailed system information"
+      setup:
+        gather_subset: "all"
+      register: system_facts
+
+    - name: "Get disk usage information"
+      command: df -h
+      register: disk_usage
+      changed_when: false
+
+    - name: "Get memory information"
+      command: free -h
+      register: memory_info
+      changed_when: false
+
+    - name: "Get running processes"
+      command: ps aux --sort=-%cpu | head -20
+      register: top_processes
+      changed_when: false
+
+    - name: "Get network connections"
+      command: ss -tulpn
+      register: network_connections
+      changed_when: false
+
+    - name: "Get systemd services status"
+      command: systemctl list-units --type=service --state=running --no-pager
+      register: running_services
+      changed_when: false
+      ignore_errors: yes
+
+    - name: "Get installed packages (Debian/Ubuntu)"
+      command: dpkg -l
+      register: installed_packages_deb
+      changed_when: false
+      ignore_errors: yes
+      when: ansible_os_family == "Debian"
+
+    - name: "Get installed packages (RedHat/Fedora)"
+      command: rpm -qa
+      register: installed_packages_rpm
+      changed_when: false
+      ignore_errors: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: "Get ctrld status if installed"
+      command: systemctl status ctrld
+      register: ctrld_status
+      changed_when: false
+      ignore_errors: yes
+
+    - name: "Check DNS configuration"
+      command: cat /etc/resolv.conf
+      register: dns_config
+      changed_when: false
+
+    - name: "Get uptime and load"
+      command: uptime
+      register: uptime_info
+      changed_when: false
+
+    - name: "Generate comprehensive system report"
+      template:
+        src: system_report.j2
+        dest: "{{ output_dir }}/{{ inventory_hostname }}_system_report_{{ report_timestamp }}.txt"
+      delegate_to: localhost
+      vars:
+        report_data:
+          hostname: "{{ inventory_hostname }}"
+          ansible_host: "{{ ansible_host | default('N/A') }}"
+          os_info: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+          kernel: "{{ ansible_kernel }}"
+          architecture: "{{ ansible_architecture }}"
+          cpu_cores: "{{ ansible_processor_vcpus }}"
+          memory_total: "{{ ansible_memtotal_mb }}MB"
+          uptime_seconds: "{{ ansible_uptime_seconds }}"
+          disk_usage: "{{ disk_usage.stdout }}"
+          memory_info: "{{ memory_info.stdout }}"
+          top_processes: "{{ top_processes.stdout }}"
+          network_connections: "{{ network_connections.stdout }}"
+          running_services: "{{ running_services.stdout | default('N/A') }}"
+          dns_config: "{{ dns_config.stdout }}"
+          uptime_info: "{{ uptime_info.stdout }}"
+          ctrld_status: "{{ ctrld_status.stdout | default('ctrld not installed') }}"
+          packages: "{{ installed_packages_deb.stdout | default(installed_packages_rpm.stdout | default('Package info unavailable')) }}"
+
+- name: "Generate Network Device Information"
+  hosts: network_devices
+  gather_facts: no
+  vars:
+    output_dir: "/tmp/gutter_bonez_reports"
+    report_timestamp: "{{ ansible_date_time.epoch }}"
+
+  tasks:
+    - name: "Get Ubiquiti device information"
+      raw: |
+        echo "=== DEVICE INFO ==="
+        show version
+        echo "=== INTERFACES ==="
+        show interfaces
+        echo "=== ROUTING ==="
+        show ip route
+        echo "=== DHCP LEASES ==="
+        show dhcp leases
+      register: ubiquiti_info
+      when: inventory_hostname in groups['ubiquiti_routers']
+      ignore_errors: yes
+
+    - name: "Get ASUS router information"
+      raw: |
+        echo "=== SYSTEM INFO ==="
+        uname -a
+        echo "=== MEMORY ==="
+        free
+        echo "=== INTERFACES ==="
+        ifconfig
+        echo "=== PROCESSES ==="
+        ps | head -20
+      register: asus_info
+      when: inventory_hostname in groups['asus_routers']
+      ignore_errors: yes
+
+    - name: "Get other device information"
+      raw: |
+        echo "=== CONNECTION TEST ==="
+        echo "Device accessible via SSH"
+        echo "Hostname: $(hostname 2>/dev/null || echo 'N/A')"
+        echo "Uptime: $(uptime 2>/dev/null || echo 'N/A')"
+      register: other_info
+      when: inventory_hostname in groups['other_routers'] or inventory_hostname in groups['unifi_devices']
+      ignore_errors: yes
+
+    - name: "Save network device report"
+      copy:
+        content: |
+          ========================================
+          NETWORK DEVICE REPORT
+          ========================================
+          Device: {{ inventory_hostname }}
+          IP Address: {{ ansible_host }}
+          SSH User: {{ ansible_ssh_user }}
+          Device Type: {% if inventory_hostname in groups['ubiquiti_routers'] %}Ubiquiti Router{% elif inventory_hostname in groups['asus_routers'] %}ASUS Router{% elif inventory_hostname in groups['other_routers'] %}Other Router{% else %}UniFi Device{% endif %}
+
+          Timestamp: {{ ansible_date_time.iso8601 }}
+
+          ========================================
+          DEVICE OUTPUT
+          ========================================
+          {% if ubiquiti_info is defined and ubiquiti_info.stdout is defined %}
+          {{ ubiquiti_info.stdout }}
+          {% elif asus_info is defined and asus_info.stdout is defined %}
+          {{ asus_info.stdout }}
+          {% elif other_info is defined and other_info.stdout is defined %}
+          {{ other_info.stdout }}
+          {% else %}
+          No device information collected
+          {% endif %}
+        dest: "{{ output_dir }}/{{ inventory_hostname }}_network_device_{{ report_timestamp }}.txt"
+      delegate_to: localhost
+
+- name: "Generate Summary Report"
+  hosts: localhost
+  gather_facts: yes
+  run_once: yes
+  vars:
+    output_dir: "/tmp/gutter_bonez_reports"
+    report_timestamp: "{{ ansible_date_time.epoch }}"
+
+  tasks:
+    - name: "Create inventory summary"
+      copy:
+        content: |
+          ========================================
+          GUTTER BONEZ INFRASTRUCTURE SUMMARY
+          ========================================
+          Report Generated: {{ ansible_date_time.iso8601 }}
+          Generated By: {{ ansible_user_id }}@{{ ansible_hostname }}
+
+          ========================================
+          INVENTORY OVERVIEW
+          ========================================
+          Total Hosts: {{ groups['all'] | length }}
+
+          Linux Systems: {{ groups['linux'] | length }}
+          {% for host in groups['linux'] %}
+            - {{ host }} ({{ hostvars[host]['ansible_host'] | default('hostname') }})
+          {% endfor %}
+
+          Network Devices: {{ groups['network_devices'] | length }}
+          {% for host in groups['network_devices'] %}
+            - {{ host }} ({{ hostvars[host]['ansible_host'] }}) - {{ hostvars[host]['ansible_ssh_user'] }}
+          {% endfor %}
+
+          Production Subnet Hosts: {{ groups['production'] | length }}
+          Remote Hosts: {{ groups['remote'] | length }}
+
+          ========================================
+          GROUP BREAKDOWN
+          ========================================
+          Production Linux: {{ groups['production_linux'] | join(', ') }}
+          Apple Devices: {{ groups['apple'] | join(', ') }}
+          VM Network: {{ groups['vmnet'] | join(', ') }}
+
+          Ubiquiti Routers: {{ groups['ubiquiti_routers'] | join(', ') }}
+          ASUS Routers: {{ groups['asus_routers'] | join(', ') }}
+          Other Routers: {{ groups['other_routers'] | join(', ') }}
+          UniFi Devices: {{ groups['unifi_devices'] | join(', ') }}
+
+          Styx Internal: {{ groups['styx_internal'] | join(', ') }}
+          Vultr Hosts: {{ groups['vultr_hosts'] | join(', ') }}
+          Linode Hosts: {{ groups['linode_hosts'] | join(', ') }}
+
+          ========================================
+          REPORT FILES GENERATED
+          ========================================
+          Individual system reports saved to: {{ output_dir }}/
+          - *_system_report_{{ report_timestamp }}.txt (Linux hosts)
+          - *_network_device_{{ report_timestamp }}.txt (Network devices)
+
+          View all reports: ls -la {{ output_dir }}/*_{{ report_timestamp }}.txt
+          ========================================
+        dest: "{{ output_dir }}/infrastructure_summary_{{ report_timestamp }}.txt"
+
+    - name: "Display completion message"
+      debug:
+        msg: |
+          ========================================
+          SYSTEM INFORMATION GATHERING COMPLETE
+          ========================================
+
+          Reports saved to: {{ output_dir }}/
+
+          Summary report: infrastructure_summary_{{ report_timestamp }}.txt
+
+          View all reports:
+          ls -la {{ output_dir }}/*_{{ report_timestamp }}.txt
+
+          ========================================

@@ -3,7 +3,7 @@
 # Gutter Bonez Sensitive Files Encryption Script
 # Encrypts all sensitive files containing network topology, credentials, and infrastructure details
 # Author: Azazel (QA & Support Engineer)
-# Version: 1.0
+# Version: 1.1 - Updated to recommend vault strings approach
 
 set -euo pipefail
 
@@ -53,10 +53,19 @@ print_separator() {
 # Help function
 show_help() {
     cat << EOF
-🔐 Gutter Bonez Sensitive Files Encryption Script
+🔐 Gutter Bonez Sensitive Files Encryption Script (Legacy)
+
+⚠️  RECOMMENDATION: Use the new vault_secrets.sh script instead!
+    The new script encrypts only secret strings, not entire files,
+    making configuration more readable and maintainable.
 
 USAGE:
     $0 [OPTIONS]
+
+NEW APPROACH (RECOMMENDED):
+    ./scripts/vault_secrets.sh encrypt-string "mySecret"
+    ./scripts/vault_secrets.sh interactive
+    ./scripts/vault_secrets.sh find-secrets inventory/Inventory01.ini
 
 OPTIONS:
     -h, --help              Show this help message
@@ -67,15 +76,14 @@ OPTIONS:
     -v, --verify            Verify vault password file exists
     --force                 Force encryption even if files are already encrypted
     --dry-run              Show what would be encrypted without doing it
+    --strings              Use vault strings instead of file encryption (NEW!)
 
 DESCRIPTION:
     This script encrypts sensitive files in the Gutter Bonez infrastructure
-    automation repository using Ansible Vault. It protects:
+    automation repository using Ansible Vault.
 
-    • Network topology information (IP addresses, hostnames)
-    • Infrastructure inventory files
-    • Group variables with sensitive configuration
-    • Any files containing darkfort network details
+    ⭐ NEW: Vault strings encrypt only secret values while keeping YAML readable
+    📁 OLD: Full file encryption (less maintainable)
 
 FILES ENCRYPTED:
     • inventory/hosts
@@ -85,33 +93,47 @@ FILES ENCRYPTED:
     • group_vars/debian.yml (if contains sensitive data)
     • Any other files with network topology data
 
+VAULT STRINGS VS FULL FILE ENCRYPTION:
+
+  VAULT STRINGS (NEW - RECOMMENDED):
+  ✓ Only secrets encrypted, structure visible
+  ✓ Easy to diff and review changes
+  ✓ Selective encryption of values
+  ✓ Better for collaboration
+
+  password: !vault |
+            \$ANSIBLE_VAULT;1.1;AES256
+            66663...
+
+  FULL FILE ENCRYPTION (OLD):
+  ✗ Entire file encrypted, unreadable
+  ✗ Hard to review and maintain
+  ✗ All or nothing approach
+
+  \$ANSIBLE_VAULT;1.1;AES256
+  66663036386439643835653361...
+
+EXAMPLES:
+    # NEW APPROACH - Vault strings (recommended)
+    ./scripts/vault_secrets.sh encrypt-string "myPassword"
+    ./scripts/vault_secrets.sh find-secrets group_vars/all
+
+    # OLD APPROACH - Full file encryption
+    $0 --encrypt
+    $0 --check
+    $0 --decrypt
+
+MIGRATION PATH:
+    1. Use vault_secrets.sh to find secrets:
+       ./scripts/vault_secrets.sh find-secrets group_vars/all
+    2. Replace secrets with vault strings
+    3. Test with: ./scripts/vault_secrets.sh validate-file group_vars/all
+
 SECURITY:
     • Uses .Vault_Pass.txt file for encryption password
     • Creates backups before encryption (.pre-vault-backup)
     • Validates file integrity after encryption
     • Prevents accidental double-encryption
-
-EXAMPLES:
-    # Encrypt all sensitive files
-    $0
-
-    # List files that will be encrypted
-    $0 --list
-
-    # Check current encryption status
-    $0 --check
-
-    # Decrypt files temporarily for editing
-    $0 --decrypt
-
-    # Verify setup before encrypting
-    $0 --verify
-
-NOTES:
-    • Make sure .Vault_Pass.txt exists and contains your vault password
-    • Encrypted files can be edited with: ansible-vault edit <file>
-    • Never commit the .Vault_Pass.txt file to git
-    • Use 'git add' after encryption to stage encrypted files
 
 EOF
 }
@@ -446,11 +468,37 @@ cleanup_backups() {
     log_success "Backup files cleaned up"
 }
 
+# Recommend new vault strings approach
+recommend_new_approach() {
+    log_header "💡 Recommendation: Use Vault Strings Instead"
+
+    log_info "The new vault_secrets.sh script offers better secret management:"
+    echo ""
+    echo -e "  ${GREEN}✓${NC} Encrypts only secret values, not entire files"
+    echo -e "  ${GREEN}✓${NC} Keeps YAML structure readable and diffable"
+    echo -e "  ${GREEN}✓${NC} Easier collaboration and code reviews"
+    echo -e "  ${GREEN}✓${NC} Selective encryption of sensitive values"
+    echo ""
+    log_info "Quick start with vault strings:"
+    echo "  ./scripts/vault_secrets.sh encrypt-string 'mySecret'"
+    echo "  ./scripts/vault_secrets.sh find-secrets inventory/Inventory01.ini"
+    echo "  ./scripts/vault_secrets.sh interactive"
+    echo ""
+    read -p "Continue with legacy full-file encryption? (y/N): " -n 1 -r
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Consider using the new vault strings approach!"
+        exit 0
+    fi
+}
+
 # Main function
 main() {
     local action="encrypt"
     local force=false
     local dry_run=false
+    local use_strings=false
 
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
@@ -487,6 +535,10 @@ main() {
                 dry_run=true
                 shift
                 ;;
+            --strings)
+                log_info "Vault strings mode - redirecting to vault_secrets.sh"
+                exec "$GUTTER_BONEZ_ROOT/scripts/vault_secrets.sh" "$@"
+                ;;
             --cleanup-backups)
                 action="cleanup"
                 shift
@@ -506,6 +558,11 @@ main() {
     # Check prerequisites for most actions
     if [[ "$action" != "help" ]]; then
         check_prerequisites
+    fi
+
+    # Recommend new approach for encrypt action
+    if [[ "$action" == "encrypt" && "$force" != true ]]; then
+        recommend_new_approach
     fi
 
     # Execute requested action

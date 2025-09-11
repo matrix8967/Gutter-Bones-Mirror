@@ -1,0 +1,211 @@
+---
+# ====================
+# VAULT STRINGS EXAMPLE
+# ====================
+# This file demonstrates how to use Ansible Vault strings
+# to encrypt individual secrets while keeping YAML readable
+
+# ====================
+# BASIC VAULT STRINGS
+# ====================
+
+# Instead of encrypting the whole file, encrypt just the secret values:
+
+# BEFORE (plaintext - INSECURE):
+# admin_password: "mySecretPassword123"
+
+# AFTER (vault string - SECURE):
+admin_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          66663036386439643835653361386437663265336665663539323632353939376439306266373064
+          3766386661643430623064396537656238376462333234370a343834633234343366623935656366
+          36613538663431633661653839633639316335343030323731313530383033353162333436383734
+          3636303162343435370a653538643133303331633234363831653132326531316263316535383436
+          6236
+
+# ====================
+# SSH KEYS WITH VAULT STRINGS
+# ====================
+
+# SSH private key encrypted as vault string
+ssh_private_key: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          33363535613762663930656566633563646432363236626533666539343330363337356662663264
+          3234373564303561626638316632386136373333383237320a353632613561313566313732623066
+          35613566323631386331323063626662376365666139656666623438636639373166326365363938
+          3038653433646135330a383264346362666333383935303836623532323763363830396138346537
+
+# Public key can remain plaintext (not sensitive)
+ssh_public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... user@hostname"
+
+# ====================
+# NETWORK DEVICE CREDENTIALS
+# ====================
+
+# Router credentials with vault strings
+router_credentials:
+  edgerouter:
+    username: "Matrix"  # Username can be plaintext
+    password: !vault |
+              $ANSIBLE_VAULT;1.1;AES256
+              34643864393736633963316239393862356534646466323832383333376434303339346533643737
+              6531656564376235613465393336323838383937663934340a323635336235626565653533376436
+
+  asuswrt:
+    username: "admin"
+    password: !vault |
+              $ANSIBLE_VAULT;1.1;AES256
+              31323761663830666235353562663032653565656566376430343830653766373437336535323331
+              3064306263386463643435656565656437396535373236370a366461303264613938636533353237
+
+# ====================
+# API KEYS AND TOKENS
+# ====================
+
+# Control D API credentials
+controld_api:
+  api_key: !vault |
+           $ANSIBLE_VAULT;1.1;AES256
+           39343135613266643833373138613664323330646439653763306631626638613432323165323536
+           3635346437323666343366383835623430336135373634380a653566623136353537313031636433
+
+  device_id: "device_12345"  # Non-sensitive ID
+
+  org_id: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          66653839326337613766613266323037323166346537616534383066346365663664663966383361
+
+# ====================
+# DATABASE CONNECTIONS
+# ====================
+
+# Database with mixed sensitive/non-sensitive values
+database_config:
+  host: "10.10.10.100"      # Internal IP - not sensitive
+  port: 5432                # Standard port - not sensitive
+  database: "monitoring"    # DB name - not sensitive
+  username: !vault |
+            $ANSIBLE_VAULT;1.1;AES256
+            36383138303339316462383434623938313534303066323037396534326562636534336462663731
+            6366656431336364356366346336333032663739656262640a343833653635323438333031323836
+  password: !vault |
+            $ANSIBLE_VAULT;1.1;AES256
+            63616362393933336339633866616436383931643637646266663266613362656666306663643031
+            3361336261386261616634613662653932663230383039390a333039343330343836333931636463
+
+# ====================
+# COMPLEX STRUCTURES
+# ====================
+
+# Multiple environments with vault strings
+environments:
+  production:
+    api_endpoint: "https://api.prod.controld.com"  # Not sensitive
+    api_key: !vault |
+             $ANSIBLE_VAULT;1.1;AES256
+             35393263313339666534323138323936653539663536636238666435613463636332346439643838
+
+  staging:
+    api_endpoint: "https://api.staging.controld.com"
+    api_key: !vault |
+             $ANSIBLE_VAULT;1.1;AES256
+             37623139663339616264323461343436636534353238663033653661346165373835353965343462
+
+# ====================
+# MONITORING SERVICES
+# ====================
+
+# Grafana configuration
+grafana_config:
+  admin_user: "admin"       # Standard username
+  admin_password: !vault |
+                  $ANSIBLE_VAULT;1.1;AES256
+                  65656235373537613933316661333936636263656363343134313936303562396661353831383830
+
+  database_url: !vault |
+                $ANSIBLE_VAULT;1.1;AES256
+                31636235633734393935383437646430326361346135633835346132326661376264373938643665
+
+# Slack integration
+slack_notifications:
+  webhook_url: !vault |
+               $ANSIBLE_VAULT;1.1;AES256
+               66343235313832396639633532383235393334643864353034643139643264633563663831396635
+
+  channel: "#infrastructure"  # Channel name not sensitive
+  username: "gutter-bonez-bot"
+
+# ====================
+# CLOUD CREDENTIALS
+# ====================
+
+# AWS credentials
+aws_config:
+  region: "us-east-1"       # Region not sensitive
+  access_key_id: !vault |
+                 $ANSIBLE_VAULT;1.1;AES256
+                 39643339636361306336323231343235656262653962646464313133326430303230316235383339
+
+  secret_access_key: !vault |
+                     $ANSIBLE_VAULT;1.1;AES256
+                     64636334383533333738646239653261663536643530326439363336363538343666353563383131
+
+# ====================
+# TEMPLATE EXAMPLES
+# ====================
+
+# Using vault strings in Jinja2 templates
+template_variables:
+  db_connection_string: "postgresql://{{ db_user }}:{{ db_password }}@{{ db_host }}:5432/{{ db_name }}"
+
+  # Where these come from vault strings:
+  db_user: !vault |
+           $ANSIBLE_VAULT;1.1;AES256
+           36383138303339316462383434623938313534303066323037396534326562636534336462663731
+
+  db_password: !vault |
+               $ANSIBLE_VAULT;1.1;AES256
+               63616362393933336339633866616436383931643637646266663266613362656666306663643031
+
+  # Non-sensitive values remain plaintext
+  db_host: "10.10.10.100"
+  db_name: "gutter_bonez"
+
+# ====================
+# USAGE INSTRUCTIONS
+# ====================
+
+# TO CREATE VAULT STRINGS:
+#
+# 1. Use the vault_secrets.sh script:
+#    ./scripts/vault_secrets.sh encrypt-string "mySecretPassword"
+#
+# 2. Or use ansible-vault directly:
+#    ansible-vault encrypt_string --vault-password-file .Vault_Pass.txt "mySecret"
+#
+# 3. Interactive mode:
+#    ./scripts/vault_secrets.sh interactive
+#
+# TO USE IN PLAYBOOKS:
+#
+# - Variables work exactly the same as plaintext
+# - Ansible automatically decrypts vault strings
+# - Reference normally: "{{ admin_password }}"
+#
+# TO EDIT VAULT STRINGS:
+#
+# 1. Decrypt to see current value:
+#    ./scripts/vault_secrets.sh decrypt-string "$ANSIBLE_VAULT;1.1;AES256..."
+#
+# 2. Encrypt new value:
+#    ./scripts/vault_secrets.sh encrypt-string "newPassword"
+#
+# 3. Replace the vault string in the file
+#
+# BENEFITS:
+# ✓ File remains readable and diffable
+# ✓ Only secrets are encrypted
+# ✓ Easy to see structure and non-sensitive values
+# ✓ Can selectively encrypt different values
+# ✓ Works with all Ansible tools
+# ✓ Better for code reviews and documentation

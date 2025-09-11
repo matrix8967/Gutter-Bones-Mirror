@@ -1,0 +1,117 @@
+---
+# ====================
+# GUTTER BONEZ CONNECTIVITY TEST
+# ====================
+# Tests SSH connectivity and basic functionality across all device types
+# Usage: ansible-playbook -i inventory/Inventory01.ini playbooks/tests/connectivity_test.yml
+
+- name: "Test Linux Systems Connectivity"
+  hosts: linux
+  gather_facts: yes
+  vars:
+    ansible_ssh_timeout: 10
+  tasks:
+    - name: "Ping test"
+      ping:
+      register: ping_result
+
+    - name: "Get system info"
+      setup:
+        filter: "ansible_distribution*,ansible_hostname,ansible_uptime_seconds"
+      register: system_info
+
+    - name: "Test sudo access"
+      command: whoami
+      become: yes
+      register: sudo_test
+
+    - name: "Display results"
+      debug:
+        msg: |
+          Host: {{ inventory_hostname }}
+          IP: {{ ansible_host | default('hostname') }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version | default('') }}
+          Uptime: {{ (ansible_uptime_seconds | int / 86400) | round(1) }} days
+          Sudo works: {{ sudo_test.stdout == 'root' }}
+
+- name: "Test Network Devices Connectivity"
+  hosts: network_devices
+  gather_facts: no
+  vars:
+    ansible_ssh_timeout: 15
+  tasks:
+    - name: "Test SSH connectivity to Ubiquiti devices"
+      raw: "show version"
+      register: ubiquiti_version
+      when: inventory_hostname in groups['ubiquiti_routers']
+
+    - name: "Test SSH connectivity to ASUS routers"
+      raw: "uname -a"
+      register: asus_info
+      when: inventory_hostname in groups['asus_routers']
+
+    - name: "Test SSH connectivity to other routers"
+      raw: "echo 'Connection test successful'"
+      register: other_test
+      when: inventory_hostname in groups['other_routers'] or inventory_hostname in groups['unifi_devices']
+
+    - name: "Display network device results"
+      debug:
+        msg: |
+          Device: {{ inventory_hostname }}
+          IP: {{ ansible_host }}
+          User: {{ ansible_ssh_user }}
+          Connection: SUCCESS
+          {% if ubiquiti_version is defined and ubiquiti_version.stdout is defined %}
+          Version Info: {{ ubiquiti_version.stdout.split('\n')[0] | default('N/A') }}
+          {% elif asus_info is defined and asus_info.stdout is defined %}
+          System: {{ asus_info.stdout.split('\n')[0] | default('N/A') }}
+          {% else %}
+          Status: Connected
+          {% endif %}
+
+- name: "Test Remote Systems via Jumphost"
+  hosts: remote
+  gather_facts: yes
+  vars:
+    ansible_ssh_timeout: 20
+  tasks:
+    - name: "Test jumphost connectivity"
+      ping:
+      register: remote_ping
+
+    - name: "Get remote system info"
+      command: "hostname && uptime"
+      register: remote_info
+
+    - name: "Display remote results"
+      debug:
+        msg: |
+          Remote Host: {{ inventory_hostname }}
+          Jumphost: Styx
+          Hostname: {{ remote_info.stdout_lines[0] | default('Unknown') }}
+          Uptime: {{ remote_info.stdout_lines[1] | default('Unknown') }}
+
+- name: "Connectivity Summary Report"
+  hosts: localhost
+  gather_facts: no
+  run_once: yes
+  tasks:
+    - name: "Generate summary"
+      debug:
+        msg: |
+          ========================================
+          CONNECTIVITY TEST SUMMARY
+          ========================================
+
+          Total hosts tested: {{ groups['all'] | length }}
+
+          Linux systems: {{ groups['linux'] | length }}
+          Network devices: {{ groups['network_devices'] | length }}
+          Remote systems: {{ groups['remote'] | length }}
+
+          Production subnet: {{ groups['production'] | length }}
+
+          ========================================
+          Test completed at: {{ ansible_date_time.iso8601 }}
+          ========================================
