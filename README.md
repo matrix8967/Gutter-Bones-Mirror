@@ -49,6 +49,65 @@ This toolkit is optimized for the **darkfort** network infrastructure:
 - **DNS resolution testing and validation** across multiple resolvers
 - **Performance benchmarking automation** with latency profiling
 
+## 🚀 Quick Start
+
+### Production Usage (Remote Host Testing)
+
+**This is the primary use case**: Running DNS security tests from your workstation against remote infrastructure.
+
+```bash
+# 1. Create your inventory file
+cp inventory/example_hosts.yml inventory/my_hosts.yml
+# Edit inventory/my_hosts.yml with your actual hosts
+
+# 2. Run production DNS security testing
+./scripts/dns_security_test.sh -i inventory/my_hosts.yml
+
+# 3. View results on your workstation
+firefox /tmp/gutter_bonez_dns_security/dns-security-*/comprehensive_report.html
+```
+
+**Examples:**
+```bash
+# Test specific router group
+./scripts/dns_security_test.sh -i inventory/my_hosts.yml -l routers
+
+# Comprehensive security audit
+./scripts/dns_security_test.sh -i inventory/my_hosts.yml -t '["baseline","malicious_blocking","https_interception"]'
+
+# Control D integration test
+./scripts/dns_security_test.sh -i inventory/my_hosts.yml --controld -l controld_hosts
+```
+
+### Demo/Development Mode (Local Testing)
+
+**For framework testing only**: These run against localhost to validate the framework itself.
+
+```bash
+# Interactive demo menu
+./scripts/demo_dns_security.sh
+
+# Polished demo output
+./scripts/polished_dns_demo.sh
+```
+
+### Results Location
+
+**All results are automatically saved to your workstation**:
+- 📊 **HTML Report**: `/tmp/gutter_bonez_dns_security/dns-security-*/comprehensive_report.html`
+- 📋 **JSON Data**: `/tmp/gutter_bonez_dns_security/dns-security-*/results.json`
+- 🔧 **CI Variables**: `/tmp/gutter_bonez_dns_security/dns-security-*/ci_variables.env`
+
+### Inventory Setup
+
+See `inventory/example_hosts.yml` for comprehensive examples of:
+- SSH key-based router access
+- Windows WinRM configuration
+- Control D enabled hosts
+- Group-specific test configurations
+
+📖 **Full Documentation**: See [USAGE.md](USAGE.md) for detailed production usage guide.
+
 ### ☁️ **Cloud & Virtualization**
 
 - **KVM/QEMU virtual machine provisioning**

@@ -1,0 +1,113 @@
+# Example Inventory for Gutter Bonez DNS Security Testing
+# Copy this file and modify for your environment
+
+# =============================================================================
+# Router/Network Equipment Testing
+# =============================================================================
+[routers]
+# ASUSWRT-Merlin routers
+asus-ax6000    ansible_host=192.168.1.1   ansible_user=admin      ansible_ssh_private_key_file=~/.ssh/router_key
+asus-ax58u     ansible_host=192.168.2.1   ansible_user=admin      ansible_ssh_private_key_file=~/.ssh/router_key
+
+# EdgeRouter/UniFi
+edgerouter-8   ansible_host=10.0.1.1      ansible_user=ubnt       ansible_ssh_private_key_file=~/.ssh/ubnt_key
+unifi-dream    ansible_host=10.0.1.2      ansible_user=root       ansible_ssh_private_key_file=~/.ssh/unifi_key
+
+# MikroTik
+mikrotik-hex   ansible_host=192.168.88.1  ansible_user=admin      ansible_ssh_private_key_file=~/.ssh/mikrotik_key
+
+# pfSense/OpnSense (SSH enabled)
+pfsense-fw     ansible_host=10.0.0.1      ansible_user=admin      ansible_ssh_private_key_file=~/.ssh/pfsense_key
+
+# =============================================================================
+# Linux Servers & VMs
+# =============================================================================
+[servers]
+# Pop!_OS/Ubuntu servers
+pop-os-vm      ansible_host=192.168.1.100 ansible_user=azazel
+ubuntu-server  ansible_host=192.168.1.101 ansible_user=azazel
+
+# Fedora/RHEL systems
+fedora-test    ansible_host=192.168.1.102 ansible_user=testuser
+centos-srv     ansible_host=10.0.1.50     ansible_user=root       ansible_ssh_private_key_file=~/.ssh/centos_key
+
+# Raspberry Pi devices
+pi-zero-2w     ansible_host=192.168.1.200 ansible_user=pi         ansible_ssh_private_key_file=~/.ssh/pi_key
+pi4-server     ansible_host=192.168.1.201 ansible_user=pi         ansible_ssh_private_key_file=~/.ssh/pi_key
+
+# =============================================================================
+# Windows Clients (WinRM configured)
+# =============================================================================
+[windows_clients]
+win11-pro      ansible_host=192.168.1.50  ansible_user=administrator  ansible_connection=winrm  ansible_winrm_transport=ntlm
+win-server-22  ansible_host=192.168.1.51  ansible_user=admin          ansible_connection=winrm  ansible_winrm_transport=kerberos
+
+# =============================================================================
+# macOS Clients (SSH enabled)
+# =============================================================================
+[macos_clients]
+macbook-test   ansible_host=192.168.1.60  ansible_user=azazel     ansible_ssh_private_key_file=~/.ssh/mac_key
+
+# =============================================================================
+# Control D Enabled Hosts
+# =============================================================================
+[controld_hosts]
+# Servers running ctrld daemon
+server-ctrld   ansible_host=192.168.1.110 ansible_user=azazel
+router-ctrld   ansible_host=192.168.1.1   ansible_user=admin      ansible_ssh_private_key_file=~/.ssh/router_key
+
+# =============================================================================
+# Group Variables
+# =============================================================================
+[routers:vars]
+# Router-specific settings
+dns_controld_integration=true
+dns_security_tests=["baseline","malicious_blocking","captive_portal"]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+[servers:vars]
+# Server-specific settings
+dns_security_tests=["baseline","malicious_blocking","https_interception","secure_dns"]
+ansible_become=yes
+ansible_become_method=sudo
+
+[windows_clients:vars]
+# Windows-specific settings
+ansible_winrm_server_cert_validation=ignore
+dns_security_tests=["baseline","captive_portal"]
+
+[controld_hosts:vars]
+# Control D integration enabled
+dns_controld_integration=true
+dns_security_tests=["baseline","malicious_blocking"]
+ansible_become=yes
+
+# =============================================================================
+# Global Variables
+# =============================================================================
+[all:vars]
+# SSH settings for all hosts
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+ansible_host_key_checking=False
+
+# Test environment identifier
+test_environment=production
+
+# Timeout settings
+ansible_ssh_timeout=30
+ansible_winrm_read_timeout=60
+
+# =============================================================================
+# Usage Examples:
+# =============================================================================
+# Test all routers:
+#   ./scripts/dns_security_test.sh -i inventory/example_hosts.yml -l routers
+#
+# Test Control D hosts:
+#   ./scripts/dns_security_test.sh -i inventory/example_hosts.yml -l controld_hosts --controld
+#
+# Comprehensive audit:
+#   ./scripts/dns_security_test.sh -i inventory/example_hosts.yml -t '["baseline","malicious_blocking","https_interception","captive_portal"]'
+#
+# Single host test:
+#   ./scripts/dns_security_test.sh -i inventory/example_hosts.yml -l asus-ax6000 -v
