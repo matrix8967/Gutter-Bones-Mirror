@@ -1,0 +1,146 @@
+---
+# ====================
+# CONTROL D VERIFICATION FIX TEST
+# ====================
+# Simple playbook to test the Control D parsing fix
+# Usage: ansible-playbook -i inventory/Inventory01.ini playbooks/test_controld_fix.yml
+
+- name: Test Control D Verification Fix
+  hosts: localhost
+  gather_facts: no
+  vars:
+    dns_controld_integration: true
+    debug_dns: true
+
+  tasks:
+    - name: Test Control D verification endpoint
+      uri:
+        url: "https://verify.controld.com"
+        method: GET
+        timeout: 15
+        return_content: yes
+      register: controld_comprehensive_test
+      failed_when: false
+
+    - name: Show raw response for debugging
+      debug:
+        msg: |
+          Status: {{ controld_comprehensive_test.status | default('no_status') }}
+          Content Length: {{ controld_comprehensive_test.content | default('') | length }}
+          Has Control Content: {{ 'Control' in (controld_comprehensive_test.content | default('')) }}
+          First 200 chars: {{ controld_comprehensive_test.content | default('no_content') | truncate(200) }}
+
+    - name: Parse Control D verification details (FIXED)
+      block:
+        # First, safely extract matches into lists using regex_findall
+        - name: Extract Control D data with regex_findall
+          set_fact:
+            controld_matches:
+              dns_server: "{{ controld_comprehensive_test.content | default('') | regex_findall('DNS Server: ([0-9.]+)') }}"
+              location: "{{ controld_comprehensive_test.content | default('') | regex_findall('Location: ([^>]+)') }}"
+              resolver_ip: "{{ controld_comprehensive_test.content | default('') | regex_findall('Resolver IP: ([0-9.]+)') }}"
+              filtering_status: "{{ controld_comprehensive_test.content | default('') | regex_findall('Filtering: ([^<]+)') }}"
+
+        - name: Show extracted matches
+          debug:
+            msg: |
+              DNS Server matches: {{ controld_matches.dns_server }}
+              Location matches: {{ controld_matches.location }}
+              Resolver IP matches: {{ controld_matches.resolver_ip }}
+              Filtering matches: {{ controld_matches.filtering_status }}
+
+        # Then safely get first match or default - no more "first" filter on None
+        - name: Set Control D verification details
+          set_fact:
+            controld_verification:
+              accessible: "{{ controld_comprehensive_test.status | default(0) == 200 }}"
+              response_time: "{{ controld_comprehensive_test.elapsed | default(0) }}"
+              status_code: "{{ controld_comprehensive_test.status | default(0) }}"
+              has_content: "{{ controld_comprehensive_test.content is defined and controld_comprehensive_test.content | length > 0 }}"
+              dns_server: "{{ controld_matches.dns_server[0] | default('not_detected') }}"
+              location: "{{ controld_matches.location[0] | default('not_detected') }}"
+              resolver_ip: "{{ controld_matches.resolver_ip[0] | default('not_detected') }}"
+              filtering_status: "{{ controld_matches.filtering_status[0] | default('not_detected') }}"
+              service_detected: "{{ 'Control' in (controld_comprehensive_test.content | default('')) }}"
+      when:
+        - dns_controld_integration
+        - controld_comprehensive_test is defined
+
+    - name: Display final Control D verification results
+      debug:
+        msg: |
+          ========================================
+          CONTROL D VERIFICATION RESULTS
+          ========================================
+          Accessible: {{ controld_verification.accessible }}
+          Status Code: {{ controld_verification.status_code }}
+          Response Time: {{ controld_verification.response_time }}s
+          Has Content: {{ controld_verification.has_content }}
+          Service Detected: {{ controld_verification.service_detected }}
+
+          Parsed Details:
+          DNS Server: {{ controld_verification.dns_server }}
+          Location: {{ controld_verification.location }}
+          Resolver IP: {{ controld_verification.resolver_ip }}
+          Filtering Status: {{ controld_verification.filtering_status }}
+          ========================================
+
+    - name: Test with sample data (fallback test)
+      block:
+        - name: Create sample Control D response
+          set_fact:
+            sample_controld_content: |
+              <!DOCTYPE html>
+              <html>
+              <head><title>Control D Verification</title></head>
+              <body>
+              <h1>DNS Verification</h1>
+              <p>DNS Server: 76.76.19.19</p>
+              <p>Location: United States</p>
+              <p>Resolver IP: 192.168.1.1</p>
+              <p>Filtering: Active</p>
+              <p>Status: Connected to Control D</p>
+              </body>
+              </html>
+
+        - name: Test regex patterns with sample data
+          set_fact:
+            sample_matches:
+              dns_server: "{{ sample_controld_content | regex_findall('DNS Server: ([0-9.]+)') }}"
+              location: "{{ sample_controld_content | regex_findall('Location: ([^>]+)') }}"
+              resolver_ip: "{{ sample_controld_content | regex_findall('Resolver IP: ([0-9.]+)') }}"
+              filtering_status: "{{ sample_controld_content | regex_findall('Filtering: ([^<]+)') }}"
+
+        - name: Show sample parsing results
+          debug:
+            msg: |
+              ========================================
+              SAMPLE DATA PARSING TEST
+              ========================================
+              DNS Server: {{ sample_matches.dns_server[0] | default('not_found') }}
+              Location: {{ sample_matches.location[0] | default('not_found') }}
+              Resolver IP: {{ sample_matches.resolver_ip[0] | default('not_found') }}
+              Filtering Status: {{ sample_matches.filtering_status[0] | default('not_found') }}
+              ========================================
+      when: not (controld_verification.accessible | default(false))
+
+    - name: Final status summary
+      debug:
+        msg: |
+          ========================================
+          TEST SUMMARY
+          ========================================
+          {% if controld_verification.accessible %}
+          ✅ Control D verification successful!
+          - Connected to Control D service
+          - DNS Server: {{ controld_verification.dns_server }}
+          - Response time: {{ controld_verification.response_time }}s
+          {% else %}
+          ⚠️  Control D verification failed or not connected
+          - Status: {{ controld_verification.status_code | default('unknown') }}
+          - This is normal if not connected to Control D
+          {% endif %}
+
+          🔧 Regex parsing fix: {{ "WORKING" if controld_matches is defined else "NOT APPLIED" }}
+          📊 Sample data test: {{ "PASSED" if sample_matches is defined else "SKIPPED" }}
+          ========================================

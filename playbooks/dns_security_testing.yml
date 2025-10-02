@@ -259,15 +259,40 @@
           register: controld_comprehensive_test
           failed_when: false
 
-        - name: Parse Control D verification details
-          set_fact:
-            controld_verification:
-              accessible: "{{ controld_comprehensive_test.status == 200 }}"
-              response_time: "{{ controld_comprehensive_test.elapsed | default(0) }}"
-              dns_server: "{{ controld_comprehensive_test.content | regex_search('DNS Server: ([0-9.]+)', '\\1') | first | default('unknown') }}"
-              location: "{{ controld_comprehensive_test.content | regex_search('Location: ([^\\n\\r]+)', '\\1') | first | default('unknown') }}"
-              resolver_ip: "{{ controld_comprehensive_test.content | regex_search('Resolver IP: ([0-9.]+)', '\\1') | first | default('unknown') }}"
-              filtering_status: "{{ controld_comprehensive_test.content | regex_search('Filtering: ([^\\n\\r]+)', '\\1') | first | default('unknown') }}"
+        - name: Debug Control D response for troubleshooting
+          debug:
+            msg: |
+              Control D Response Status: {{ controld_comprehensive_test.status | default('no_response') }}
+              Content Preview: {{ controld_comprehensive_test.content | default('no_content') | truncate(300) }}
+          when:
+            - dns_controld_integration
+            - controld_comprehensive_test is defined
+            - debug_dns | default(false)
+
+        - name: Parse Control D verification details (FIXED)
+          block:
+            # First, safely extract matches into lists using regex_findall
+            - name: Extract Control D data with regex_findall
+              set_fact:
+                controld_matches:
+                  dns_server: "{{ controld_comprehensive_test.content | default('') | regex_findall('DNS Server: ([0-9.]+)') }}"
+                  location: "{{ controld_comprehensive_test.content | default('') | regex_findall('Location: ([^>]+)') }}"
+                  resolver_ip: "{{ controld_comprehensive_test.content | default('') | regex_findall('Resolver IP: ([0-9.]+)') }}"
+                  filtering_status: "{{ controld_comprehensive_test.content | default('') | regex_findall('Filtering: ([^<]+)') }}"
+
+            # Then safely get first match or default - no more "first" filter on None
+            - name: Set Control D verification details
+              set_fact:
+                controld_verification:
+                  accessible: "{{ controld_comprehensive_test.status | default(0) == 200 }}"
+                  response_time: "{{ controld_comprehensive_test.elapsed | default(0) }}"
+                  status_code: "{{ controld_comprehensive_test.status | default(0) }}"
+                  has_content: "{{ controld_comprehensive_test.content is defined and controld_comprehensive_test.content | length > 0 }}"
+                  dns_server: "{{ controld_matches.dns_server[0] | default('not_detected') }}"
+                  location: "{{ controld_matches.location[0] | default('not_detected') }}"
+                  resolver_ip: "{{ controld_matches.resolver_ip[0] | default('not_detected') }}"
+                  filtering_status: "{{ controld_matches.filtering_status[0] | default('not_detected') }}"
+                  service_detected: "{{ 'Control' in (controld_comprehensive_test.content | default('')) }}"
           when:
             - dns_controld_integration
             - controld_comprehensive_test is defined
@@ -418,7 +443,7 @@
                   "performance": {{ dns_security_summary.performance_metrics.average_response_time | default(0) }},
                   "security_issues": {{ dns_security_summary.security_findings.https_security.interception_detected | default(false) | lower }}
                 },
-                "status": "{{ 'PASS' if (dns_security_summary.baseline_health.success_rate | default(0)) >= 90 and (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(0)) >= 80 else 'FAIL' }}",
+                "status": "{{ 'PASS' if (dns_security_summary.baseline_health.success_rate | default(0) | float) >= 90 and (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(0) | float) >= 80 else 'FAIL' }}",
                 "artifacts": [
                   "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}/comprehensive_report.html",
                   "/tmp/gutter_bonez_dns_security/{{ dns_test_session }}/results.json"
@@ -457,11 +482,11 @@
 
           The following critical security issues were found:
 
-          {% if (dns_security_summary.baseline_health.success_rate | default(100)) < 90 %}
+          {% if (dns_security_summary.baseline_health.success_rate | default(100) | float) < 90 %}
           • DNS Reliability Issue: {{ dns_security_summary.baseline_health.success_rate }}% success rate (< 90%)
           {% endif %}
 
-          {% if (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(100)) < 80 %}
+          {% if (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(100) | float) < 80 %}
           • Poor Threat Protection: {{ dns_security_summary.security_findings.malicious_blocking.effectiveness }}% blocking rate (< 80%)
           {% endif %}
 
@@ -469,7 +494,7 @@
           • HTTPS Interception: Potential man-in-the-middle attack detected
           {% endif %}
 
-          {% if dns_security_summary.security_findings.dns_poisoning.potential_incidents | default(0) > 0 %}
+          {% if (dns_security_summary.security_findings.dns_poisoning.potential_incidents | default(0) | int) > 0 %}
           • DNS Poisoning: {{ dns_security_summary.security_findings.dns_poisoning.potential_incidents }} potential incidents
           {% endif %}
 
@@ -478,10 +503,10 @@
       when:
         - dns_security_fail_on_critical
         - >
-          (dns_security_summary.baseline_health.success_rate | default(100)) < 90 or
-          (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(100)) < 80 or
+          (dns_security_summary.baseline_health.success_rate | default(100) | float) < 90 or
+          (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(100) | float) < 80 or
           dns_security_summary.security_findings.https_security.interception_detected | default(false) or
-          (dns_security_summary.security_findings.dns_poisoning.potential_incidents | default(0)) > 0
+          (dns_security_summary.security_findings.dns_poisoning.potential_incidents | default(0) | int) > 0
 
   handlers:
     - name: cleanup_dns_test_artifacts
