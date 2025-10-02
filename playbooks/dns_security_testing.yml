@@ -16,10 +16,10 @@
     dns_security_tests: "{{ dns_test_types | default(['baseline']) }}"
 
     # Fail on critical findings
-    dns_security_fail_on_critical: "{{ fail_on_critical | default(false) }}"
+    dns_security_fail_on_critical: "{{ (fail_on_critical | default(false)) | bool }}"
 
     # Control D integration
-    dns_controld_integration: "{{ controld_integration | default(false) }}"
+    dns_controld_integration: "{{ (controld_integration | default(false)) | bool }}"
 
     # Custom malicious domains for testing
     dns_malicious_test_domains:
@@ -45,8 +45,8 @@
           - "Target Host: {{ inventory_hostname }}"
           - "Environment: {{ dns_test_environment }}"
           - "Test Types: {{ dns_security_tests | default(['baseline']) | join(', ') }}"
-          - "Control D Integration: {{ 'Enabled' if dns_controld_integration else 'Disabled' }}"
-          - "Fail on Critical: {{ 'Yes' if dns_security_fail_on_critical else 'No' }}"
+          - "Control D Integration: {{ 'Enabled' if dns_controld_integration | bool else 'Disabled' }}"
+          - "Fail on Critical: {{ 'Yes' if dns_security_fail_on_critical | bool else 'No' }}"
           - "=========================================="
 
     - name: Create DNS security test results directory
@@ -92,7 +92,7 @@
           stat:
             path: "{{ '/usr/local/bin/ctrld' if ansible_system == 'Darwin' else '/usr/bin/ctrld' }}"
           register: ctrld_binary_check
-          when: dns_controld_integration
+          when: dns_controld_integration | bool
 
     - name: Record test environment information
       set_fact:
@@ -265,7 +265,7 @@
               Control D Response Status: {{ controld_comprehensive_test.status | default('no_response') }}
               Content Preview: {{ controld_comprehensive_test.content | default('no_content') | truncate(300) }}
           when:
-            - dns_controld_integration
+            - dns_controld_integration | bool
             - controld_comprehensive_test is defined
             - debug_dns | default(false)
 
@@ -294,7 +294,7 @@
                   filtering_status: "{{ controld_matches.filtering_status[0] | default('not_detected') }}"
                   service_detected: "{{ 'Control' in (controld_comprehensive_test.content | default('')) }}"
           when:
-            - dns_controld_integration
+            - dns_controld_integration | bool
             - controld_comprehensive_test is defined
 
         - name: Test Control D policy enforcement
@@ -326,7 +326,7 @@
           changed_when: false
           failed_when: false
           when:
-            - dns_controld_integration
+            - dns_controld_integration | bool
             - ansible_system != 'Windows'
 
         - name: Monitor ctrld service health
@@ -365,9 +365,9 @@
           changed_when: false
           failed_when: false
           when:
-            - dns_controld_integration
+            - dns_controld_integration | bool
             - ansible_system == 'Linux'
-      when: dns_controld_integration
+      when: dns_controld_integration | bool
 
   post_tasks:
     # ========================================
@@ -501,7 +501,7 @@
           📊 Review the full report for detailed analysis and remediation steps:
           /tmp/gutter_bonez_dns_security/{{ dns_test_session }}/comprehensive_report.html
       when:
-        - dns_security_fail_on_critical
+        - dns_security_fail_on_critical | bool
         - >
           (dns_security_summary.baseline_health.success_rate | default(100) | float) < 90 or
           (dns_security_summary.security_findings.malicious_blocking.effectiveness | default(100) | float) < 80 or

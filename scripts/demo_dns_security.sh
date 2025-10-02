@@ -239,8 +239,8 @@ demo_basic_health_check() {
     print_step "Running DNS baseline health assessment..."
 
     local test_cmd="ansible-playbook ${PROJECT_ROOT}/playbooks/dns_security_testing.yml"
-    test_cmd+=" --extra-vars 'dns_security_tests=[\"baseline\"] test_environment=demo'"
-    test_cmd+=" --extra-vars 'dns_security_fail_on_critical=false dns_controld_integration=false'"
+    test_cmd+=" --extra-vars '{\"dns_security_tests\":[\"baseline\"], \"test_environment\":\"demo\"}'"
+    test_cmd+=" --extra-vars '{\"dns_security_fail_on_critical\":false, \"dns_controld_integration\":false}'"
     test_cmd+=" -i ${DEMO_INVENTORY_FILE}"
 
     print_info "Command: $test_cmd"
@@ -262,8 +262,8 @@ demo_malicious_blocking() {
     print_step "Testing DNS filtering and threat protection..."
 
     local test_cmd="ansible-playbook ${PROJECT_ROOT}/playbooks/dns_security_testing.yml"
-    test_cmd+=" --extra-vars 'dns_security_tests=[\"malicious_blocking\"] test_environment=demo'"
-    test_cmd+=" --extra-vars 'dns_controld_integration=false'"
+    test_cmd+=" --extra-vars '{\"dns_security_tests\":[\"malicious_blocking\"], \"test_environment\":\"demo\"}'"
+    test_cmd+=" --extra-vars '{\"dns_controld_integration\":false}'"
     test_cmd+=" -i ${DEMO_INVENTORY_FILE}"
 
     print_info "Testing malicious domains: ads.testcategory.com, malware.testcategory.com, phishing.testcategory.com"
@@ -285,8 +285,8 @@ demo_https_interception() {
     print_step "Analyzing certificate chains for interception..."
 
     local test_cmd="ansible-playbook ${PROJECT_ROOT}/playbooks/dns_security_testing.yml"
-    test_cmd+=" --extra-vars 'dns_security_tests=[\"https_interception\"] test_environment=demo'"
-    test_cmd+=" --extra-vars 'dns_controld_integration=false'"
+    test_cmd+=" --extra-vars '{\"dns_security_tests\":[\"https_interception\"], \"test_environment\":\"demo\"}'"
+    test_cmd+=" --extra-vars '{\"dns_controld_integration\":false}'"
     test_cmd+=" -i ${DEMO_INVENTORY_FILE}"
 
     print_info "Checking certificates for: google.com, github.com, cloudflare.com"
@@ -308,8 +308,8 @@ demo_captive_portal() {
     print_step "Testing for captive portal presence..."
 
     local test_cmd="ansible-playbook ${PROJECT_ROOT}/playbooks/dns_security_testing.yml"
-    test_cmd+=" --extra-vars 'dns_security_tests=[\"captive_portal\"] test_environment=demo'"
-    test_cmd+=" --extra-vars 'dns_controld_integration=false'"
+    test_cmd+=" --extra-vars '{\"dns_security_tests\":[\"captive_portal\"], \"test_environment\":\"demo\"}'"
+    test_cmd+=" --extra-vars '{\"dns_controld_integration\":false}'"
     test_cmd+=" -i ${DEMO_INVENTORY_FILE}"
 
     print_info "Testing connectivity to: detectportal.firefox.com, connectivitycheck.gstatic.com"
@@ -331,8 +331,8 @@ demo_doh_testing() {
     print_step "Testing secure DNS protocols..."
 
     local test_cmd="ansible-playbook ${PROJECT_ROOT}/playbooks/dns_security_testing.yml"
-    test_cmd+=" --extra-vars 'dns_security_tests=[\"secure_dns\"] test_environment=demo'"
-    test_cmd+=" --extra-vars 'dns_controld_integration=false'"
+    test_cmd+=" --extra-vars '{\"dns_security_tests\":[\"secure_dns\"], \"test_environment\":\"demo\"}'"
+    test_cmd+=" --extra-vars '{\"dns_controld_integration\":false}'"
     test_cmd+=" -i ${DEMO_INVENTORY_FILE}"
 
     print_info "Testing DoH providers: Cloudflare, Google, Quad9"
@@ -354,8 +354,8 @@ demo_controld_integration() {
     print_step "Testing Control D service integration..."
 
     local test_cmd="ansible-playbook ${PROJECT_ROOT}/playbooks/dns_security_testing.yml"
-    test_cmd+=" --extra-vars 'dns_security_tests=[\"baseline\",\"malicious_blocking\"] test_environment=demo'"
-    test_cmd+=" --extra-vars 'dns_controld_integration=true'"
+    test_cmd+=" --extra-vars '{\"dns_security_tests\":[\"baseline\",\"malicious_blocking\"], \"test_environment\":\"demo\"}'"
+    test_cmd+=" --extra-vars '{\"dns_controld_integration\":true}'"
     test_cmd+=" -i ${DEMO_INVENTORY_FILE}"
 
     print_info "Validating: verify.controld.com, ctrld service status, policy enforcement"
@@ -378,7 +378,7 @@ demo_comprehensive_audit() {
     print_warning "This may take 5-10 minutes to complete"
 
     local test_cmd="ansible-playbook ${PROJECT_ROOT}/playbooks/dns_security_testing.yml"
-    test_cmd+=" --extra-vars 'test_environment=demo dns_controld_integration=false'"
+    test_cmd+=" --extra-vars '{\"test_environment\":\"demo\", \"dns_controld_integration\":false}'"
     test_cmd+=" -i ${DEMO_INVENTORY_FILE}"
 
     print_info "Running all security tests: baseline, malicious blocking, HTTPS interception, performance"
@@ -430,8 +430,8 @@ demo_custom_configuration() {
 
     create_demo_inventory
     local test_cmd="ansible-playbook ${PROJECT_ROOT}/playbooks/dns_security_testing.yml"
-    test_cmd+=" --extra-vars 'dns_security_tests=${categories_json} test_environment=demo'"
-    test_cmd+=" --extra-vars 'dns_controld_integration=false'"
+    test_cmd+=" --extra-vars '{\"dns_security_tests\":${categories_json}, \"test_environment\":\"demo\"}'"
+    test_cmd+=" --extra-vars '{\"dns_controld_integration\":false}'"
     test_cmd+=" -i ${DEMO_INVENTORY_FILE}"
 
     if eval "$test_cmd"; then

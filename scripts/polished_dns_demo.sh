@@ -164,7 +164,7 @@ show_usage_examples() {
     echo ""
     echo "# ${CYAN}Control D integration testing${NC}"
     echo "ansible-playbook playbooks/dns_security_testing.yml \\"
-    echo "  --extra-vars \"dns_controld_integration=true\""
+    echo "  --extra-vars '{\"dns_controld_integration\":true}'\""
     echo ""
     echo "# ${CYAN}Integration with main site deployment${NC}"
     echo "ansible-playbook playbooks/site.yml \\"
