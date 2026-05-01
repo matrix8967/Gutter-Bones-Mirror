@@ -317,6 +317,199 @@
       when: ansible_system != 'Windows'
 
 # ========================================
+# DNS Benchmarking with dnspyre
+# ========================================
+- name: "⚡ DNS Benchmarking with dnspyre"
+  block:
+    - name: Check dnspyre availability
+      command: which dnspyre
+      register: dnspyre_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install dnspyre binary
+      block:
+        - name: Resolve dnspyre architecture
+          set_fact:
+            _dnspyre_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+
+        - name: Fetch dnspyre latest release metadata
+          uri:
+            url: "https://api.github.com/repos/tantalor93/dnspyre/releases/latest"
+            return_content: yes
+            headers:
+              Accept: "application/vnd.github.v3+json"
+          register: _dnspyre_release_meta
+          failed_when: false
+
+        - name: Download and extract dnspyre
+          shell: |
+            set -e
+            VERSION="{{ _dnspyre_release_meta.json.tag_name | default('v3.3.1') }}"
+            TMPDIR=$(mktemp -d)
+            curl -fsSL "https://github.com/tantalor93/dnspyre/releases/download/${VERSION}/dnspyre_linux_{{ _dnspyre_arch }}.tar.gz" \
+              | tar -xz -C "${TMPDIR}"
+            install -m 0755 "${TMPDIR}/dnspyre" /usr/local/bin/dnspyre
+            rm -rf "${TMPDIR}"
+          become: yes
+          register: dnspyre_install
+          failed_when: false
+      when:
+        - dnspyre_check.rc != 0
+        - dns_install_tools | default(false)
+        - ansible_system == 'Linux'
+
+    - name: Set dnspyre availability fact
+      set_fact:
+        dnspyre_available: "{{ dnspyre_check.rc == 0 or (dnspyre_install is defined and not dnspyre_install.failed | default(true)) }}"
+
+    - name: Benchmark ctrld local listener with dnspyre
+      shell: |
+        OUTFILE=$(mktemp /tmp/dnspyre_ctrld_XXXX.json)
+        dnspyre \
+          --server {{ dnspyre_config.resolvers.ctrld_local | default('127.0.0.1:53') }} \
+          --duration {{ dnspyre_config.duration | default('10s') }} \
+          --types A \
+          --export-json "${OUTFILE}" \
+          {{ dnspyre_config.test_domains | join(' ') }} >/dev/null 2>&1
+        cat "${OUTFILE}"
+        rm -f "${OUTFILE}"
+      register: dnspyre_ctrld_raw
+      changed_when: false
+      failed_when: false
+      when:
+        - "'dnspyre_benchmark' in dns_security_tests"
+        - dnspyre_available | bool
+
+    - name: Benchmark public baseline resolver with dnspyre
+      shell: |
+        OUTFILE=$(mktemp /tmp/dnspyre_baseline_XXXX.json)
+        dnspyre \
+          --server {{ dnspyre_config.resolvers.public_baseline | default('1.1.1.1:53') }} \
+          --duration {{ dnspyre_config.duration | default('10s') }} \
+          --types A \
+          --export-json "${OUTFILE}" \
+          {{ dnspyre_config.test_domains | join(' ') }} >/dev/null 2>&1
+        cat "${OUTFILE}"
+        rm -f "${OUTFILE}"
+      register: dnspyre_baseline_raw
+      changed_when: false
+      failed_when: false
+      when:
+        - "'dnspyre_benchmark' in dns_security_tests"
+        - dnspyre_available | bool
+
+    - name: Benchmark ControlD upstream resolver with dnspyre
+      shell: |
+        OUTFILE=$(mktemp /tmp/dnspyre_controld_XXXX.json)
+        dnspyre \
+          --server {{ dnspyre_config.resolvers.controld_upstream | default('76.76.2.11:53') }} \
+          --duration {{ dnspyre_config.duration | default('10s') }} \
+          --types A \
+          --export-json "${OUTFILE}" \
+          {{ dnspyre_config.test_domains | join(' ') }} >/dev/null 2>&1
+        cat "${OUTFILE}"
+        rm -f "${OUTFILE}"
+      register: dnspyre_controld_raw
+      changed_when: false
+      failed_when: false
+      when:
+        - "'dnspyre_benchmark' in dns_security_tests"
+        - dnspyre_available | bool
+
+    - name: Compile dnspyre results
+      set_fact:
+        dnspyre_results:
+          available: "{{ dnspyre_available | bool }}"
+          ctrld_local: "{{ dnspyre_ctrld_raw.stdout | default('{}') | from_json }}"
+          public_baseline: "{{ dnspyre_baseline_raw.stdout | default('{}') | from_json }}"
+          controld_upstream: "{{ dnspyre_controld_raw.stdout | default('{}') | from_json }}"
+      failed_when: false
+  when:
+    - dnspyre_config.enabled | default(true)
+    - ansible_system in ['Linux', 'Darwin']
+    - not (is_router | default(false))
+
+# ========================================
+# Network Path Analysis with trippy
+# ========================================
+- name: "🗺️ Network Path Analysis with trippy"
+  block:
+    - name: Check trippy (trip) availability
+      command: which trip
+      register: trippy_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install trippy binary
+      block:
+        - name: Resolve trippy architecture
+          set_fact:
+            _trippy_arch: "{{ 'x86_64' if ansible_architecture == 'x86_64' else 'aarch64' }}"
+
+        - name: Fetch trippy latest release metadata
+          uri:
+            url: "https://api.github.com/repos/fujiapple852/trippy/releases/latest"
+            return_content: yes
+            headers:
+              Accept: "application/vnd.github.v3+json"
+          register: _trippy_release_meta
+          failed_when: false
+
+        - name: Download and extract trippy
+          shell: |
+            set -e
+            VERSION="{{ _trippy_release_meta.json.tag_name | default('0.11.0') }}"
+            TMPDIR=$(mktemp -d)
+            curl -fsSL "https://github.com/fujiapple852/trippy/releases/download/${VERSION}/trippy-${VERSION}-{{ _trippy_arch }}-unknown-linux-musl.tar.gz" \
+              | tar -xz -C "${TMPDIR}"
+            install -m 0755 "${TMPDIR}/trip" /usr/local/bin/trip
+            rm -rf "${TMPDIR}"
+          become: yes
+          register: trippy_install
+          failed_when: false
+      when:
+        - trippy_check.rc != 0
+        - dns_install_tools | default(false)
+        - ansible_system == 'Linux'
+
+    - name: Set trippy availability fact
+      set_fact:
+        trippy_available: "{{ trippy_check.rc == 0 or (trippy_install is defined and not trippy_install.failed | default(true)) }}"
+
+    - name: Trace network paths to targets with trippy
+      shell: |
+        trip \
+          --mode json \
+          --report-cycles {{ trippy_config.rounds | default(5) }} \
+          {{ item }} 2>/dev/null
+      loop: "{{ trippy_config.targets | default(['76.76.2.11', '76.76.19.19', '1.1.1.1']) }}"
+      register: trippy_raw_results
+      changed_when: false
+      failed_when: false
+      become: yes
+      when:
+        - "'trippy_paths' in dns_security_tests"
+        - trippy_available | bool
+
+    - name: Compile trippy results
+      set_fact:
+        trippy_results:
+          available: "{{ trippy_available | bool }}"
+          paths: >-
+            {{ trippy_raw_results.results | default([])
+               | selectattr('stdout', 'defined')
+               | selectattr('stdout', 'ne', '')
+               | map(attribute='stdout')
+               | map('from_json')
+               | list }}
+      failed_when: false
+  when:
+    - trippy_config.enabled | default(true)
+    - ansible_system in ['Linux', 'Darwin']
+    - not (is_router | default(false))
+
+# ========================================
 # Control D Integration Testing
 # ========================================
 - name: Control D DNS service validation
@@ -436,6 +629,8 @@
         service_accessible: "{{ controld_status.accessible | default(false) }}"
         ctrld_active: false
         dns_server: "{{ controld_status.dns_server | default('unknown') }}"
+      dnspyre_benchmark: "{{ dnspyre_results | default({'available': false}) }}"
+      trippy_paths: "{{ trippy_results | default({'available': false, 'paths': []}) }}"
 
 - name: Generate DNS security report
   template:

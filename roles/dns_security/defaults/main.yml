@@ -13,6 +13,8 @@ dns_security_tests:
   - "captive_portal"
   - "secure_dns"
   - "performance"
+  - "dnspyre_benchmark"
+  - "trippy_paths"
 
 # Control whether to fail the playbook on critical security findings
 dns_security_fail_on_critical: false
@@ -290,12 +292,16 @@ dns_security_tools:
     openssl: "/usr/bin/openssl"
     curl: "/usr/bin/curl"
     kdig: "/usr/bin/kdig"  # Optional, for DoT testing
+    dnspyre: "/usr/local/bin/dnspyre"
+    trippy: "/usr/local/bin/trip"
 
   darwin:
     dig: "/usr/bin/dig"
     nslookup: "/usr/bin/nslookup"
     openssl: "/usr/bin/openssl"
     curl: "/usr/bin/curl"
+    dnspyre: "/usr/local/bin/dnspyre"
+    trippy: "/usr/local/bin/trip"
 
   windows:
     nslookup: "nslookup.exe"
@@ -352,3 +358,37 @@ dns_security_cleanup:
 
   # Maximum disk space for test results (MB)
   max_results_size: 100
+
+# ==============================================
+# dnspyre Benchmark Configuration
+# ==============================================
+dnspyre_config:
+  enabled: true
+  duration: "10s"
+  concurrency: 5
+  types:
+    - "A"
+    - "AAAA"
+  test_domains:
+    - "verify.controld.com"
+    - "google.com"
+    - "cloudflare.com"
+    - "github.com"
+  resolvers:
+    ctrld_local: "127.0.0.1:53"
+    public_baseline: "1.1.1.1:53"
+    controld_upstream: "76.76.2.11:53"
+
+# ==============================================
+# trippy Network Path Configuration
+# ==============================================
+trippy_config:
+  enabled: true
+  rounds: 5
+  targets:
+    - "76.76.2.11"    # ControlD bootstrap
+    - "76.76.19.19"   # ControlD resolver
+    - "1.1.1.1"       # Cloudflare baseline
+
+# Set to true to allow test playbooks to install missing tools
+dns_install_tools: false

@@ -528,6 +528,115 @@
             </div>
         </div>
 
+        <!-- dnspyre Benchmark -->
+        {% if dns_security_summary.dnspyre_benchmark.available | default(false) %}
+        <div class="section">
+            <h2>⚡ DNS Benchmark (dnspyre)</h2>
+
+            {% set ctrld_stats = dns_security_summary.dnspyre_benchmark.ctrld_local.Statistics | default({}) %}
+            {% set baseline_stats = dns_security_summary.dnspyre_benchmark.public_baseline.Statistics | default({}) %}
+            {% set controld_stats = dns_security_summary.dnspyre_benchmark.controld_upstream.Statistics | default({}) %}
+
+            <div class="test-results">
+                <div class="test-item">
+                    <div class="test-name">ctrld local (127.0.0.1:53)</div>
+                    <div class="test-result">
+                        QPS: {{ ctrld_stats.QPS | default('N/A') }} &nbsp;|&nbsp;
+                        Mean: {{ ctrld_stats.Mean | default('N/A') }} &nbsp;|&nbsp;
+                        p99: {{ ctrld_stats.p99 | default('N/A') }}
+                    </div>
+                    <div class="test-result">
+                        Success: {{ dns_security_summary.dnspyre_benchmark.ctrld_local.Success | default('N/A') }}
+                        / {{ dns_security_summary.dnspyre_benchmark.ctrld_local.TotalRequests | default('N/A') }}
+                    </div>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-name">ControlD upstream (76.76.2.11:53)</div>
+                    <div class="test-result">
+                        QPS: {{ controld_stats.QPS | default('N/A') }} &nbsp;|&nbsp;
+                        Mean: {{ controld_stats.Mean | default('N/A') }} &nbsp;|&nbsp;
+                        p99: {{ controld_stats.p99 | default('N/A') }}
+                    </div>
+                    <div class="test-result">
+                        Success: {{ dns_security_summary.dnspyre_benchmark.controld_upstream.Success | default('N/A') }}
+                        / {{ dns_security_summary.dnspyre_benchmark.controld_upstream.TotalRequests | default('N/A') }}
+                    </div>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-name">Public baseline (1.1.1.1:53)</div>
+                    <div class="test-result">
+                        QPS: {{ baseline_stats.QPS | default('N/A') }} &nbsp;|&nbsp;
+                        Mean: {{ baseline_stats.Mean | default('N/A') }} &nbsp;|&nbsp;
+                        p99: {{ baseline_stats.p99 | default('N/A') }}
+                    </div>
+                    <div class="test-result">
+                        Success: {{ dns_security_summary.dnspyre_benchmark.public_baseline.Success | default('N/A') }}
+                        / {{ dns_security_summary.dnspyre_benchmark.public_baseline.TotalRequests | default('N/A') }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% elif 'dnspyre_benchmark' in dns_security_tests %}
+        <div class="section">
+            <h2>⚡ DNS Benchmark (dnspyre)</h2>
+            <div class="alert alert-warning">
+                <strong>⚠️ dnspyre not available:</strong> Install it with <code>dns_install_tools: true</code> or manually place the binary at <code>/usr/local/bin/dnspyre</code>.
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- trippy Network Paths -->
+        {% if dns_security_summary.trippy_paths.available | default(false) and dns_security_summary.trippy_paths.paths | length > 0 %}
+        <div class="section">
+            <h2>🗺️ Network Path Analysis (trippy)</h2>
+
+            {% for path in dns_security_summary.trippy_paths.paths %}
+            {% set target = path.info.target | default('unknown') %}
+            <h3>{{ target }}</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>TTL</th>
+                        <th>Host(s)</th>
+                        <th>Loss %</th>
+                        <th>Avg (ms)</th>
+                        <th>Best (ms)</th>
+                        <th>Worst (ms)</th>
+                        <th>StdDev</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for hop in path.hops | default([]) %}
+                    <tr>
+                        <td>{{ hop.ttl | default('?') }}</td>
+                        <td>{{ hop.hosts | default(['*']) | join(', ') }}</td>
+                        <td>
+                            {% set loss = hop.loss_pct | default(0) | float %}
+                            <span class="badge {% if loss == 0 %}badge-success{% elif loss < 10 %}badge-warning{% else %}badge-danger{% endif %}">
+                                {{ loss }}%
+                            </span>
+                        </td>
+                        <td>{{ hop.avg_ms | default('*') }}</td>
+                        <td>{{ hop.best_ms | default('*') }}</td>
+                        <td>{{ hop.worst_ms | default('*') }}</td>
+                        <td>{{ hop.stddev_ms | default('*') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endfor %}
+        </div>
+        {% elif 'trippy_paths' in dns_security_tests %}
+        <div class="section">
+            <h2>🗺️ Network Path Analysis (trippy)</h2>
+            <div class="alert alert-warning">
+                <strong>⚠️ trippy not available:</strong> Install it with <code>dns_install_tools: true</code> or manually place the binary at <code>/usr/local/bin/trip</code>.
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Control D Integration -->
         {% if dns_controld_integration %}
         <div class="section">
