@@ -1,0 +1,142 @@
+---
+# ====================
+# CTRLD TEST-ONLY PLAYBOOK
+# ====================
+# Runs DNS security tests against hosts where ctrld is already installed.
+# Does NOT install or configure ctrld — use install_ctrld.yml for that.
+#
+# Usage:
+#   # All ctrld-capable hosts
+#   ansible-playbook -i inventory/Inventory01.ini playbooks/tests/test_ctrld.yml
+#
+#   # Specific group or host
+#   ansible-playbook -i inventory/Inventory01.ini playbooks/tests/test_ctrld.yml -e target_hosts=merlin
+#   ansible-playbook -i inventory/Inventory01.ini playbooks/tests/test_ctrld.yml -e target_hosts=ctrld_linux
+#   ansible-playbook -i inventory/Inventory01.ini playbooks/tests/test_ctrld.yml --limit Darlene
+#
+#   # Override which tests run
+#   ansible-playbook -i inventory/Inventory01.ini playbooks/tests/test_ctrld.yml \
+#     -e '{"run_tests": ["baseline", "dnspyre_benchmark", "trippy_paths"]}'
+#
+#   # Auto-install dnspyre/trippy if missing
+#   ansible-playbook -i inventory/Inventory01.ini playbooks/tests/test_ctrld.yml \
+#     -e dns_install_tools=true
+
+# ====================
+# PLAY 1: PRE-FLIGHT
+# ====================
+- name: "ctrld Pre-flight Checks"
+  hosts: "{{ target_hosts | default('ctrld_targets') }}"
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Locate ctrld binary
+      shell: >
+        command -v ctrld 2>/dev/null ||
+        find /usr/local/bin /usr/bin /jffs/bin /jffs/controld /jffs/configs/controld
+        -name ctrld -type f 2>/dev/null | head -1
+      register: _ctrld_binary_found
+      changed_when: false
+      failed_when: false
+
+    - name: Check ctrld status
+      shell: "{{ _ctrld_binary_found.stdout.strip() }} status 2>/dev/null"
+      register: _ctrld_status
+      changed_when: false
+      failed_when: false
+      when:
+        - _ctrld_binary_found.rc == 0
+        - _ctrld_binary_found.stdout.strip() != ''
+
+    - name: Set ctrld_ready fact
+      set_fact:
+        ctrld_ready: "{{ _ctrld_binary_found.rc == 0 and _ctrld_binary_found.stdout.strip() != '' }}"
+        ctrld_binary: "{{ _ctrld_binary_found.stdout.strip() }}"
+
+    - name: Display pre-flight result
+      debug:
+        msg: >-
+          {{ inventory_hostname }} —
+          ctrld {{ 'FOUND at ' + ctrld_binary if ctrld_ready else 'NOT FOUND — will be skipped' }}
+
+# ====================
+# PLAY 2: RUN TESTS
+# ====================
+- name: "ctrld DNS Security Tests"
+  hosts: "{{ target_hosts | default('ctrld_targets') }}"
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Skip hosts where ctrld is not installed
+      meta: end_host
+      when: not (hostvars[inventory_hostname].ctrld_ready | default(false))
+
+    - name: Run DNS security test suite
+      include_role:
+        name: dns_security
+      vars:
+        dns_controld_integration: true
+        dns_security_tests: "{{ run_tests | default(dns_security_tests) }}"
+
+# ====================
+# PLAY 3: AGGREGATE RESULTS
+# ====================
+- name: "Aggregate ctrld Test Results"
+  hosts: localhost
+  gather_facts: yes
+  run_once: yes
+  vars:
+    _target_group: "{{ target_hosts | default('ctrld_targets') }}"
+    _run_id: "ctrld-test-{{ ansible_date_time.epoch }}"
+    _results_dir: "/tmp/gutter_bonez_dns_security/{{ _run_id }}"
+  tasks:
+    - name: Create aggregate results directory
+      file:
+        path: "{{ _results_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Build per-host result list
+      set_fact:
+        _host_results: >-
+          {{ _host_results | default([]) + [{
+            'host': item,
+            'ready': hostvars[item].ctrld_ready | default(false),
+            'summary': hostvars[item].dns_security_summary | default({})
+          }] }}
+      loop: "{{ groups[_target_group] | default([]) }}"
+
+    - name: Write aggregate JSON
+      copy:
+        content: "{{ _host_results | to_nice_json(indent=2) }}"
+        dest: "{{ _results_dir }}/aggregate_results.json"
+        mode: "0644"
+
+    - name: Print test run summary
+      debug:
+        msg: |
+          ============================================================
+          ctrld TEST RUN SUMMARY
+          ============================================================
+          Run ID  : {{ _run_id }}
+          Targets : {{ _target_group }}
+          Hosts   : {{ groups[_target_group] | default([]) | length }} targeted,
+                    {{ _host_results | selectattr('ready') | list | length }} with ctrld installed
+          ============================================================
+          {% for r in _host_results | default([]) %}
+          {% set s = r.summary %}
+          {{ r.host }}:
+          {% if r.ready and s %}
+            DNS success : {{ s.baseline_health.success_rate | default('N/A') }}%
+            Blocking    : {{ s.security_findings.malicious_blocking_rate | default('N/A') }}%
+            ControlD    : {{ 'UP' if s.controld_integration.service_accessible | default(false) else 'DOWN' }}
+            dnspyre     : {{ 'OK (' + (s.dnspyre_benchmark.ctrld_local.Statistics.QPS | default('?') | string) + ' QPS)' if s.dnspyre_benchmark.available | default(false) else 'N/A' }}
+            trippy      : {{ 'OK (' + (s.trippy_paths.paths | length | string) + ' paths)' if s.trippy_paths.available | default(false) else 'N/A' }}
+          {% else %}
+            [SKIPPED — ctrld not installed]
+          {% endif %}
+          {% endfor %}
+          ============================================================
+          Aggregate JSON : {{ _results_dir }}/aggregate_results.json
+          Per-host HTML  : /tmp/gutter_bonez_dns_security/<session>/dns_security_report.html
+          ============================================================

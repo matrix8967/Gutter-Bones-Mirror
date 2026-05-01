@@ -150,7 +150,7 @@
         echo "Hostname: $(hostname 2>/dev/null || echo 'N/A')"
         echo "Uptime: $(uptime 2>/dev/null || echo 'N/A')"
       register: other_info
-      when: inventory_hostname in groups['other_routers'] or inventory_hostname in groups['unifi_devices']
+      when: inventory_hostname in groups['freshtomato_routers'] | default([]) or inventory_hostname in groups['mikrotik_routers'] | default([]) or inventory_hostname in groups['unifi_devices'] | default([])
       ignore_errors: yes
 
     - name: "Save network device report"
@@ -162,7 +162,7 @@
           Device: {{ inventory_hostname }}
           IP Address: {{ ansible_host }}
           SSH User: {{ ansible_ssh_user }}
-          Device Type: {% if inventory_hostname in groups['ubiquiti_routers'] %}Ubiquiti Router{% elif inventory_hostname in groups['asus_routers'] %}ASUS Router{% elif inventory_hostname in groups['other_routers'] %}Other Router{% else %}UniFi Device{% endif %}
+          Device Type: {% if inventory_hostname in groups['ubiquiti_routers'] %}Ubiquiti Router{% elif inventory_hostname in groups['asus_routers'] %}ASUS Merlin Router{% elif inventory_hostname in groups['freshtomato_routers'] | default([]) %}FreshTomato Router{% elif inventory_hostname in groups['mikrotik_routers'] | default([]) %}MikroTik Router{% else %}UniFi Device{% endif %}
 
           Timestamp: {{ ansible_date_time.iso8601 }}
 
@@ -226,7 +226,8 @@
 
           Ubiquiti Routers: {{ groups['ubiquiti_routers'] | join(', ') }}
           ASUS Routers: {{ groups['asus_routers'] | join(', ') }}
-          Other Routers: {{ groups['other_routers'] | join(', ') }}
+          FreshTomato Routers: {{ groups['freshtomato_routers'] | default([]) | join(', ') }}
+          MikroTik Routers: {{ groups['mikrotik_routers'] | default([]) | join(', ') }}
           UniFi Devices: {{ groups['unifi_devices'] | join(', ') }}
 
           Styx Internal: {{ groups['styx_internal'] | join(', ') }}
